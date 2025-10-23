@@ -17,8 +17,8 @@
   <!-- Collaboration -->
   <img alt="Multi-user" src="https://img.shields.io/badge/Collaboration-multi--user-0EA5E9">
   <img alt="Access" src="https://img.shields.io/badge/Access-Invite%20by%20email-14B8A6">
-  <img alt="Privacy" src="https://img.shields.io/badge/Privacy-Project%20PIN%20(optional)-F59E0B">
-  <img alt="Roles" src="https://img.shields.io/badge/Roles-owner%20%7C%20editor%20%7C%20viewer%20(optional)-F472B6">
+  <img alt="Privacy" src="https://img.shields.io/badge/Privacy-Project%20PIN%20-F59E0B">
+  <img alt="Roles" src="https://img.shields.io/badge/Roles-owner%20%7C%20editor%20%7C%20viewer%20-F472B6">
 
   <!-- Deploy / Ops -->
   <img alt="Deploy" src="https://img.shields.io/badge/Deploy-Streamlit%20Cloud-FF4B4B?logo=streamlit&logoColor=white">
