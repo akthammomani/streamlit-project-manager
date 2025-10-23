@@ -71,7 +71,7 @@ with st.sidebar.expander("New project"):
             members = [m.strip() for m in members_csv.split(",") if m.strip()]
             pid = db.create_project(user["email"], p_name, p_start, p_end, members)
             st.success(f"Project created (id {pid}).")
-            st.experimental_rerun()
+            st.rerun()
 
 # Determine current project
 current_project = None
