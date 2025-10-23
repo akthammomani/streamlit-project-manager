@@ -19,7 +19,13 @@ import db
 from PIL import Image
 import os
 
-st.set_page_config(page_title="Project Manager", layout="wide")
+
+st.set_page_config(
+    page_title="Strivio — Project Manager",
+    page_icon="logo.png",   
+    layout="wide"
+)
+
 
 # ---------- helpers ----------
 STATUS_OPTIONS = ["Backlog", "In-Progress", "Completed"]
