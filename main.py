@@ -1,5 +1,6 @@
 # main.py
 import streamlit as st
+
 def force_rerun():
     # works on old & new Streamlit
     fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
@@ -7,7 +8,7 @@ def force_rerun():
         fn()
     else:
         st.warning("Unable to rerun: your Streamlit version is too old.")
-        
+
 import pandas as pd
 from datetime import date
 from dateutil import parser
@@ -29,6 +30,39 @@ def parse_date(x):
         return parser.parse(str(x)).date()
     except Exception:
         return None
+
+# --- compatibility shims so UI never touches lazy ORM attrs ---
+def _to_task_dict(t):
+    if isinstance(t, dict):
+        return t
+    assignee_email = None
+    if isinstance(getattr(t, "__dict__", {}), dict) and "assignee" in t.__dict__ and getattr(t.assignee, "email", None):
+        assignee_email = t.assignee.email
+    return {
+        "id": getattr(t, "id", None),
+        "name": getattr(t, "name", None),
+        "status": getattr(t, "status", None),
+        "start_date": getattr(t, "start_date", None),
+        "end_date": getattr(t, "end_date", None),
+        "progress": float(getattr(t, "progress", 0) or 0),
+        "assignee_email": assignee_email,
+    }
+
+def _to_subtask_dict(s):
+    if isinstance(s, dict):
+        return s
+    assignee_email = None
+    if isinstance(getattr(s, "__dict__", {}), dict) and "assignee" in s.__dict__ and getattr(s.assignee, "email", None):
+        assignee_email = s.assignee.email
+    return {
+        "id": getattr(s, "id", None),
+        "name": getattr(s, "name", None),
+        "status": getattr(s, "status", None),
+        "start_date": getattr(s, "start_date", None),
+        "end_date": getattr(s, "end_date", None),
+        "progress": float(getattr(s, "progress", 0) or 0),
+        "assignee_email": assignee_email,
+    }
 
 @st.cache_resource
 def _init_db_once():
@@ -61,7 +95,9 @@ if not user:
 # ---------- project selection / creation ----------
 st.sidebar.markdown("---")
 st.sidebar.subheader("Projects")
-projects = db.get_projects_for_user(user["email"])
+_projects_raw = db.get_projects_for_user(user["email"])
+# keep projects as-is (ORM ok) since we only use id/name below
+projects = _projects_raw
 proj_names = [f'{p.id} · {p.name}' for p in projects]
 selected = st.sidebar.selectbox("Open project", options=["—"] + proj_names, index=0)
 
@@ -82,7 +118,7 @@ with st.sidebar.expander("New project"):
             members = [m.strip() for m in members_csv.split(",") if m.strip()]
             pid = db.create_project(user["email"], p_name, p_start, p_end, members)
             st.success(f"Project created (id {pid}).")
-            st.rerun()
+            force_rerun()
 
 # Determine current project
 current_project = None
@@ -108,11 +144,15 @@ with tab1:
     with col2:
         pass
 
-    tasks = db.get_tasks_for_project(current_project.id)
+    # Normalize tasks to dicts so UI never touches lazy attributes
+    tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
 
     # Create / Edit Task
     with st.form("task_form", clear_on_submit=True):
-        t_id = st.selectbox("Edit existing (optional)", options=["New"] + [f"{t.id} · {t.name}" for t in tasks])
+        t_id = st.selectbox(
+            "Edit existing (optional)",
+            options=["New"] + [f"{t['id']} · {t['name']}" for t in tasks]
+        )
         t_name = st.text_input("Task name")
         t_desc = st.text_area("Description", placeholder="What needs to be done?")
         c1, c2, c3 = st.columns(3)
@@ -148,7 +188,7 @@ with tab1:
                 progress=float(t_prog),
             )
             st.success("Task saved.")
-            st.rerun()
+            force_rerun()
 
     # List tasks with inline actions
     if tasks:
@@ -173,17 +213,20 @@ with tab1:
     st.subheader("Subtasks")
     task_for_sub = st.selectbox(
         "Task",
-        options=[f"{t.id} · {t.name}" for t in tasks] if tasks else [],
+        options=[f"{t['id']} · {t['name']}" for t in tasks] if tasks else [],
         key="task_picker_for_subtasks"
     )
     if not task_for_sub and not tasks:
         st.caption("Create a task first to add subtasks.")
     else:
         picked_task_id = int(task_for_sub.split("·")[0].strip())
-        subs = db.get_subtasks_for_task(picked_task_id)
+        subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(picked_task_id)]
 
         with st.form("subtask_form", clear_on_submit=True):
-            st_id = st.selectbox("Edit existing (optional)", options=["New"] + [f"{s.id} · {s.name}" for s in subs])
+            st_id = st.selectbox(
+                "Edit existing (optional)",
+                options=["New"] + [f"{s['id']} · {s['name']}" for s in subs]
+            )
             st_name = st.text_input("Subtask name")
             c1, c2, c3 = st.columns(3)
             with c1:
@@ -217,7 +260,7 @@ with tab1:
                     progress=float(st_prog),
                 )
                 st.success("Subtask saved.")
-                st.rerun()
+                force_rerun()
 
         if subs:
             sub_rows = []
@@ -236,7 +279,7 @@ with tab1:
 # ---------- Gantt Tab ----------
 with tab2:
     st.subheader("Timeline (Gantt)")
-    tasks = db.get_tasks_for_project(current_project.id)
+    tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
     rows = []
     for t in tasks:
         if t["start_date"] and t["end_date"]:
@@ -248,7 +291,7 @@ with tab2:
                 "Assignee": t["assignee_email"],
                 "Progress": round(t["progress"], 1)
             })
-        subs = db.get_subtasks_for_task(t["id"])
+        subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
         for s in subs:
             if s["start_date"] and s["end_date"]:
                 rows.append({
@@ -263,7 +306,8 @@ with tab2:
         st.info("Add start/end dates to tasks or subtasks to see them on the Gantt.")
     else:
         df = pd.DataFrame(rows)
-        fig = px.timeline(df, x_start="Start", x_end="Finish", y="Item", hover_data=["Status", "Assignee", "Progress"], color="Status")
+        fig = px.timeline(df, x_start="Start", x_end="Finish", y="Item",
+                          hover_data=["Status", "Assignee", "Progress"], color="Status")
         fig.update_yaxes(autorange="reversed")
         st.plotly_chart(fig, use_container_width=True)
 
@@ -273,11 +317,7 @@ with tab3:
     members_line = st.text_area("Add members by email (comma-separated)")
     if st.button("Add Members"):
         emails = [e.strip() for e in members_line.split(",") if e.strip()]
-        # re-use create_project logic by just inserting ProjectMember rows
-        # simplest approach: create a no-op: call create_project with same project? Not ideal.
-        # Instead, open a short session here.
         import db as _db
-        from sqlalchemy.orm import Session
         with _db.SessionLocal() as s:
             proj = s.get(_db.Project, current_project.id)
             for e in emails:
@@ -292,5 +332,4 @@ with tab3:
                     s.add(_db.ProjectMember(project_id=proj.id, user_id=u.id, role="member"))
             s.commit()
         st.success("Members added.")
-        st.rerun()
-
+        force_rerun()
