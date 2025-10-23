@@ -94,7 +94,6 @@ _init_db_once()
 
 # ---------- Full-screen login (before any sidebar UI) ----------
 def full_screen_login():
-    # Hide sidebar & hamburger while logged out
     st.markdown("""
     <style>
       [data-testid="stSidebar"], [data-testid="baseButton-headerNoPadding"] { display: none !important; }
@@ -104,7 +103,7 @@ def full_screen_login():
 
     _, col, _ = st.columns([1, 2.2, 1])
     with col:
-        # Use st.image so Streamlit serves correctly
+        # centered by the CSS rule above
         st.image("logo_1.png", width=160)
         st.markdown("<h1 style='text-align:center;margin:10px 0 0 0;'>Strivio</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align:center;color:#6b7280;margin-top:4px;'>Simple, visual project management.</p>", unsafe_allow_html=True)
@@ -134,6 +133,7 @@ def full_screen_project_gate(user_email: str):
 
     _, col, _ = st.columns([1, 2.6, 1])
     with col:
+        # centered by the CSS rule above
         st.image("logo_1.png", width=120)
         st.markdown("<h2 style='text-align:center;margin-top:8px;'>Choose or Create a Project</h2>", unsafe_allow_html=True)
 
