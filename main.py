@@ -156,13 +156,13 @@ with tab1:
         task_rows = []
         for t in tasks:
             task_rows.append({
-                "id": t.id,
-                "Task": t.name,
-                "Status": t.status,
-                "Start": t.start_date,
-                "End": t.end_date,
-                "Assignee": getattr(t.assignee, "email", None),
-                "Progress%": round(t.progress or 0, 1)
+                "id": t["id"],
+                "Task": t["name"],
+                "Status": t["status"],
+                "Start": t["start_date"],
+                "End": t["end_date"],
+                "Assignee": t["assignee_email"],
+                "Progress%": round(t["progress"], 1)
             })
         st.dataframe(pd.DataFrame(task_rows), use_container_width=True, hide_index=True)
     else:
@@ -223,13 +223,13 @@ with tab1:
             sub_rows = []
             for s in subs:
                 sub_rows.append({
-                    "id": s.id,
-                    "Subtask": s.name,
-                    "Status": s.status,
-                    "Start": s.start_date,
-                    "End": s.end_date,
-                    "Assignee": getattr(s.assignee, "email", None),
-                    "Progress%": round(s.progress or 0, 1)
+                    "id": s["id"],
+                    "Subtask": s["name"],
+                    "Status": s["status"],
+                    "Start": s["start_date"],
+                    "End": s["end_date"],
+                    "Assignee": s["assignee_email"],
+                    "Progress%": round(s["progress"], 1)
                 })
             st.dataframe(pd.DataFrame(sub_rows), use_container_width=True, hide_index=True)
 
@@ -239,25 +239,25 @@ with tab2:
     tasks = db.get_tasks_for_project(current_project.id)
     rows = []
     for t in tasks:
-        if t.start_date and t.end_date:
+        if t["start_date"] and t["end_date"]:
             rows.append({
-                "Item": f"Task · {t.name}",
-                "Start": t.start_date,
-                "Finish": t.end_date,
-                "Status": t.status,
-                "Assignee": getattr(t.assignee, "email", None),
-                "Progress": round(t.progress or 0, 1)
+                "Item": f"Task · {t['name']}",
+                "Start": t["start_date"],
+                "Finish": t["end_date"],
+                "Status": t["status"],
+                "Assignee": t["assignee_email"],
+                "Progress": round(t["progress"], 1)
             })
-        subs = db.get_subtasks_for_task(t.id)
+        subs = db.get_subtasks_for_task(t["id"])
         for s in subs:
-            if s.start_date and s.end_date:
+            if s["start_date"] and s["end_date"]:
                 rows.append({
-                    "Item": f"Subtask · {s.name}",
-                    "Start": s.start_date,
-                    "Finish": s.end_date,
-                    "Status": s.status,
-                    "Assignee": getattr(s.assignee, "email", None),
-                    "Progress": round(s.progress or 0, 1)
+                    "Item": f"Subtask · {s['name']}",
+                    "Start": s["start_date"],
+                    "Finish": s["end_date"],
+                    "Status": s["status"],
+                    "Assignee": s["assignee_email"],
+                    "Progress": round(s["progress"], 1)
                 })
     if not rows:
         st.info("Add start/end dates to tasks or subtasks to see them on the Gantt.")
