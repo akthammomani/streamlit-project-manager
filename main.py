@@ -124,17 +124,33 @@ with st.sidebar.expander("New project"):
         p_start = st.date_input("Start", value=date.today())
     with col_p2:
         p_end = st.date_input("End", value=date.today())
+
+    # NEW: privacy + PIN
+    colx1, colx2 = st.columns(2)
+    with colx1:
+        is_public = st.checkbox("Public project (no PIN required)", value=False)
+    with colx2:
+        pin_val = st.text_input("Project PIN", type="password", disabled=is_public,
+                                help="Members will need this PIN to open the project.")
+
     members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com")
+
     if st.button("Create project", width="stretch"):
         if not p_name:
             st.warning("Please enter a project name.")
         elif p_end < p_start:
             st.warning("End date must be after start date.")
+        elif not is_public and not pin_val:
+            st.warning("Private projects require a PIN.")
         else:
             members = [m.strip() for m in members_csv.split(",") if m.strip()]
-            pid = db.create_project(user["email"], p_name, p_start, p_end, members)
+            pid = db.create_project(
+                user["email"], p_name, p_start, p_end, members,
+                is_public=is_public, pin=(pin_val or None)
+            )
             st.success(f"Project created (id {pid}).")
             force_rerun()
+
 
 # Determine current project
 current_project = None
@@ -149,101 +165,122 @@ if not current_project:
 st.title(current_project.name)
 st.caption(f"{current_project.start_date} → {current_project.end_date}")
 
+# Require PIN for private projects (one-time per session)
+pin_key = f"pin_ok_{current_project.id}"
+if not getattr(current_project, "is_public", True) and not st.session_state.get(pin_key):
+    with st.sidebar.expander("🔒 Enter project PIN to view"):
+        entered_pin = st.text_input("Project PIN", type="password", key=f"pin_in_{current_project.id}")
+        if st.button("Unlock", key=f"unlock_{current_project.id}"):
+            if db.check_project_pin(current_project.id, entered_pin):
+                st.session_state[pin_key] = True
+                force_rerun()
+            else:
+                st.error("Incorrect PIN.")
+    st.stop()
+
+role = db.get_user_role(current_project.id, user["email"]) or "viewer"
+CAN_WRITE = role in ("owner", "editor")
+IS_OWNER  = role == "owner"
+
 with st.sidebar.expander("Manage current project"):
-    if current_project:
+    if IS_OWNER:
         new_name = st.text_input("Rename project", value=current_project.name, key="rename_proj")
         colA, colB = st.columns(2)
         with colA:
-            if st.button("Save name"):
+            if st.button("Save name", key="save_project_name"):
                 db.rename_project(current_project.id, new_name)
                 st.success("Project renamed.")
                 force_rerun()
         with colB:
-            if st.button("Delete project", type="secondary"):
+            if st.button("Delete project", type="secondary", key="delete_project_btn"):
                 db.delete_project(current_project.id)
                 st.success("Project deleted.")
                 force_rerun()
     else:
-        st.caption("Open a project first.")
+        st.caption("Only the owner can manage this project.")
 
 tab1, tab2, tab3 = st.tabs(["Tasks", "Gantt", "Members"])
 
 # ---------- Tasks Tab ----------
 with tab1:
     st.subheader("Tasks")
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.markdown("**Add / Edit Task**")
-    with col2:
-        pass
 
-    # Normalize tasks to dicts so UI never touches lazy attributes
+    # Normalize tasks first (visible to all roles)
     tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
 
-    # Create / Edit Task
-    with st.form("task_form", clear_on_submit=True):
-        t_id = st.selectbox(
-            "Edit existing (optional)",
-            options=["New"] + [f"{t['id']} · {t['name']}" for t in tasks]
-        )
-        t_name = st.text_input("Task name")
-        t_desc = st.text_area("Description", placeholder="What needs to be done?")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            t_status = st.selectbox("Status", STATUS_OPTIONS, index=0)
-        with c2:
-            t_start = st.date_input("Start", value=date.today())
-        with c3:
-            t_end = st.date_input("End", value=date.today())
-        c4, c5 = st.columns(2)
-        with c4:
-            t_assignee = st.text_input("Assignee email (optional)")
-        with c5:
-            t_prog = st.slider("Progress %", 0, 100, 0)
-        submitted = st.form_submit_button("Save Task")
+    # Read-only banner for viewers
+    if not CAN_WRITE:
+        st.info("You have read-only access to this project.")
 
-    if submitted:
-        if not t_name:
-            st.warning("Task name is required.")
-        elif t_end and t_start and t_end < t_start:
-            st.warning("Task end cannot be before start.")
-        else:
-            edit_id = None if t_id == "New" else int(t_id.split("·")[0].strip())
-            db.add_or_update_task(
-                project_id=current_project.id,
-                name=t_name,
-                status=t_status,
-                start=t_start,
-                end=t_end,
-                assignee_email=t_assignee or None,
-                description=t_desc or None,
-                task_id=edit_id,
-                progress=float(t_prog),
+    # ---------- Task Create / Edit (writers only) ----------
+    if CAN_WRITE:
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("**Add / Edit Task**")
+        with col2:
+            pass
+
+        with st.form("task_form", clear_on_submit=True):
+            t_id = st.selectbox(
+                "Edit existing (optional)",
+                options=["New"] + [f"{t['id']} · {t['name']}" for t in tasks]
             )
-            st.success("Task saved.")
-            force_rerun()
+            t_name = st.text_input("Task name")
+            t_desc = st.text_area("Description", placeholder="What needs to be done?")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                t_status = st.selectbox("Status", STATUS_OPTIONS, index=0)
+            with c2:
+                t_start = st.date_input("Start", value=date.today())
+            with c3:
+                t_end = st.date_input("End", value=date.today())
+            c4, c5 = st.columns(2)
+            with c4:
+                t_assignee = st.text_input("Assignee email (optional)")
+            with c5:
+                t_prog = st.slider("Progress %", 0, 100, 0)
+            submitted = st.form_submit_button("Save Task")
 
-    # List tasks with inline actions
+        if submitted:
+            if not t_name:
+                st.warning("Task name is required.")
+            elif t_end and t_start and t_end < t_start:
+                st.warning("Task end cannot be before start.")
+            else:
+                edit_id = None if t_id == "New" else int(t_id.split("·")[0].strip())
+                db.add_or_update_task(
+                    project_id=current_project.id,
+                    name=t_name,
+                    status=t_status,
+                    start=t_start,
+                    end=t_end,
+                    assignee_email=t_assignee or None,
+                    description=t_desc or None,
+                    task_id=edit_id,
+                    progress=float(t_prog),
+                )
+                st.success("Task saved.")
+                force_rerun()
+
+    # ---------- Task List (visible to all) ----------
     if tasks:
         st.markdown("**Your Tasks**")
-        task_rows = []
-        for t in tasks:
-            task_rows.append({
-                "id": t["id"],
-                "Task": t["name"],
-                "Status": t["status"],
-                "Start": t["start_date"],
-                "End": t["end_date"],
-                "Assignee": t["assignee_email"],
-                "Progress%": round(t["progress"], 1)
-            })
+        task_rows = [{
+            "id": t["id"],
+            "Task": t["name"],
+            "Status": t["status"],
+            "Start": t["start_date"],
+            "End": t["end_date"],
+            "Assignee": t["assignee_email"],
+            "Progress%": round(t["progress"], 1)
+        } for t in tasks]
         st.dataframe(pd.DataFrame(task_rows), width="stretch", hide_index=True)
     else:
-        st.info("No tasks yet. Add your first task above.")
+        st.info("No tasks yet. Add your first task above." if CAN_WRITE else "No tasks yet.")
 
-    # --- DELETE TASK UI ---
-    st.markdown("**Delete Task**")
-    if tasks:
+    # ---------- Delete Task (writers only) ----------
+    if CAN_WRITE and tasks:
+        st.markdown("**Delete Task**")
         del_task_opt = st.selectbox(
             "Select task to delete",
             [f"{t['id']} · {t['name']}" for t in tasks],
@@ -255,76 +292,80 @@ with tab1:
             force_rerun()
 
     st.markdown("---")
-    # Subtasks UI
+
+    # ---------- Subtasks ----------
     st.subheader("Subtasks")
+
     task_for_sub = st.selectbox(
         "Task",
         options=[f"{t['id']} · {t['name']}" for t in tasks] if tasks else [],
         key="task_picker_for_subtasks"
     )
+
     if not task_for_sub and not tasks:
         st.caption("Create a task first to add subtasks.")
     else:
         picked_task_id = int(task_for_sub.split("·")[0].strip())
         subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(picked_task_id)]
 
-        with st.form("subtask_form", clear_on_submit=True):
-            st_id = st.selectbox(
-                "Edit existing (optional)",
-                options=["New"] + [f"{s['id']} · {s['name']}" for s in subs]
-            )
-            st_name = st.text_input("Subtask name")
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st_status = st.selectbox("Status", STATUS_OPTIONS, index=0)
-            with c2:
-                st_start = st.date_input("Start", value=date.today(), key="st_start")
-            with c3:
-                st_end = st.date_input("End", value=date.today(), key="st_end")
-            c4, c5 = st.columns(2)
-            with c4:
-                st_assignee = st.text_input("Assignee email (optional)")
-            with c5:
-                st_prog = st.slider("Progress %", 0, 100, 0, key="st_prog")
-            st_submit = st.form_submit_button("Save Subtask")
-
-        if st_submit:
-            if not st_name:
-                st.warning("Subtask name is required.")
-            elif st_end and st_start and st_end < st_start:
-                st.warning("Subtask end cannot be before start.")
-            else:
-                edit_id = None if st_id == "New" else int(st_id.split("·")[0].strip())
-                db.add_or_update_subtask(
-                    task_id=picked_task_id,
-                    name=st_name,
-                    status=st_status,
-                    start=st_start,
-                    end=st_end,
-                    assignee_email=st_assignee or None,
-                    subtask_id=edit_id,
-                    progress=float(st_prog),
+        # Subtask form (writers only)
+        if CAN_WRITE:
+            with st.form("subtask_form", clear_on_submit=True):
+                st_id = st.selectbox(
+                    "Edit existing (optional)",
+                    options=["New"] + [f"{s['id']} · {s['name']}" for s in subs]
                 )
-                st.success("Subtask saved.")
-                force_rerun()
+                st_name = st.text_input("Subtask name")
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st_status = st.selectbox("Status", STATUS_OPTIONS, index=0)
+                with c2:
+                    st_start = st.date_input("Start", value=date.today(), key="st_start")
+                with c3:
+                    st_end = st.date_input("End", value=date.today(), key="st_end")
+                c4, c5 = st.columns(2)
+                with c4:
+                    st_assignee = st.text_input("Assignee email (optional)")
+                with c5:
+                    st_prog = st.slider("Progress %", 0, 100, 0, key="st_prog")
+                st_submit = st.form_submit_button("Save Subtask")
 
+            if st_submit:
+                if not st_name:
+                    st.warning("Subtask name is required.")
+                elif st_end and st_start and st_end < st_start:
+                    st.warning("Subtask end cannot be before start.")
+                else:
+                    edit_id = None if st_id == "New" else int(st_id.split("·")[0].strip())
+                    db.add_or_update_subtask(
+                        task_id=picked_task_id,
+                        name=st_name,
+                        status=st_status,
+                        start=st_start,
+                        end=st_end,
+                        assignee_email=st_assignee or None,
+                        subtask_id=edit_id,
+                        progress=float(st_prog),
+                    )
+                    st.success("Subtask saved.")
+                    force_rerun()
+
+        # Subtasks table (visible to all)
         if subs:
-            sub_rows = []
-            for s in subs:
-                sub_rows.append({
-                    "id": s["id"],
-                    "Subtask": s["name"],
-                    "Status": s["status"],
-                    "Start": s["start_date"],
-                    "End": s["end_date"],
-                    "Assignee": s["assignee_email"],
-                    "Progress%": round(s["progress"], 1)
-                })
+            sub_rows = [{
+                "id": s["id"],
+                "Subtask": s["name"],
+                "Status": s["status"],
+                "Start": s["start_date"],
+                "End": s["end_date"],
+                "Assignee": s["assignee_email"],
+                "Progress%": round(s["progress"], 1)
+            } for s in subs]
             st.dataframe(pd.DataFrame(sub_rows), width="stretch", hide_index=True)
 
-        # --- DELETE SUBTASK UI ---
-        st.markdown("**Delete Subtask**")
-        if subs:
+        # Delete Subtask (writers only)
+        if CAN_WRITE and subs:
+            st.markdown("**Delete Subtask**")
             del_sub_opt = st.selectbox(
                 "Select subtask to delete",
                 [f"{s['id']} · {s['name']}" for s in subs],
@@ -334,6 +375,7 @@ with tab1:
                 db.delete_subtask(int(del_sub_opt.split("·")[0].strip()))
                 st.success("Subtask deleted.")
                 force_rerun()
+
 
 # ---------- Gantt Tab ----------
 with tab2:
@@ -376,22 +418,21 @@ with tab2:
 # ---------- Members Tab ----------
 with tab3:
     st.subheader("Project Members")
-    members_line = st.text_area("Add members by email (comma-separated)")
-    if st.button("Add Members"):
-        emails = [e.strip() for e in members_line.split(",") if e.strip()]
-        import db as _db
-        with _db.SessionLocal() as s:
-            proj = s.get(_db.Project, current_project.id)
-            for e in emails:
-                if not e:
-                    continue
-                u = _db._get_or_create_user(s, e)
-                exists = s.query(_db.ProjectMember).filter(
-                    _db.ProjectMember.project_id == proj.id,
-                    _db.ProjectMember.user_id == u.id
-                ).one_or_none()
-                if not exists:
-                    s.add(_db.ProjectMember(project_id=proj.id, user_id=u.id, role="member"))
-            s.commit()
-        st.success("Members added.")
-        force_rerun()
+
+    if not CAN_WRITE:
+        st.info("Read-only members cannot manage users.")
+    else:
+        members_line = st.text_area("Add members by email (comma-separated)")
+        role_choice = st.selectbox("Role for new members", ["viewer", "editor"])
+        if st.button("Add Members"):
+            emails = [e.strip() for e in members_line.split(",") if e.strip()]
+            if not emails:
+                st.warning("No valid emails.")
+            else:
+                import db as _db
+                with _db.SessionLocal() as s:
+                    for e in emails:
+                        _db.set_member_role(current_project.id, e, role_choice)
+                st.success(f"Added/updated {len(emails)} member(s) as {role_choice}.")
+                force_rerun()
+
