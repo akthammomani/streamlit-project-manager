@@ -151,6 +151,13 @@ def delete_task(task_id: int) -> None:
             s.delete(t)
             s.commit()
 
+def delete_subtask(subtask_id: int) -> None:
+    with SessionLocal() as s:
+        st = s.get(SubTask, subtask_id)
+        if st:
+            s.delete(st)
+            s.commit()
+
 def add_or_update_subtask(task_id: int, name: str, status: str, start: Optional[date], end: Optional[date],
                           assignee_email: Optional[str], subtask_id: Optional[int] = None,
                           progress: float = 0.0) -> int:
@@ -233,10 +240,5 @@ def get_subtasks_for_task(task_id: int):
             for r in rows
         ]
 
-def delete_subtask(subtask_id: int) -> None:
-    with SessionLocal() as s:
-        st = s.get(SubTask, subtask_id)
-        if st:
-            s.delete(st)
-            s.commit()
+
 
