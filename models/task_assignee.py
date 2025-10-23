@@ -16,3 +16,4 @@ class TaskAssignee(SQLModel, table=True):
 
     task: "Task" = Relationship(back_populates="assignees")
     user: "User" = Relationship(back_populates="task_assignments")
+
