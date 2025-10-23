@@ -1,3 +1,4 @@
+# models/user.py
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List, TYPE_CHECKING
 
@@ -8,6 +9,7 @@ if TYPE_CHECKING:
 class User(SQLModel, table=True):
     __tablename__ = "users"
     __table_args__ = {"extend_existing": True}
+
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(index=True, unique=True)
     name: Optional[str] = None
