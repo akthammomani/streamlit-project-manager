@@ -552,7 +552,8 @@ with tab2:
         "In Progress":"#2563EB",  # blue
         "Done":       "#10B981",  # green
         }
-       
+
+        df["Status"] = pd.Categorical(df["Status"], categories=list(status_colors.keys()), ordered=True)
         fig = px.timeline(
             df,
             x_start="Start",
@@ -563,9 +564,21 @@ with tab2:
             color_discrete_map=status_colors,
         )
         #fig.update_yaxes(autorange="reversed")
-        fig.update_layout(margin=dict(l=20, r=20, t=30, b=30))
-        plotly_config = {"displaylogo": False, "responsive": True}
-        st.plotly_chart(fig, width="stretch", config={"displaylogo": False, "responsive": True})
+        
+        fig.update_layout(
+        margin=dict(l=20, r=20, t=30, b=30),
+        legend_title_text="Status",
+         )
+        st.plotly_chart(
+                        fig,
+                        width="stretch",                  # replaces the old use_container_width=True
+                        config={
+                            "displaylogo": False,
+                            "responsive": True,
+                            # optional: hide some modebar buttons
+                            # "modeBarButtonsToRemove": ["toImage", "zoom2d", "select2d", "lasso2d", "resetScale2d"],
+                        },
+                    )
 
 # ---------- Members Tab ----------
 with tab3:
