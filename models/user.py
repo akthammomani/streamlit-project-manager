@@ -1,7 +1,9 @@
-# models/user.py
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, List
-from models.project import ProjectMember  # circular? ensure imports correct
+from typing import Optional, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.project_member import ProjectMember
+    from models.task_assignee import TaskAssignee
 
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
