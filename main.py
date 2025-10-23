@@ -1,4 +1,6 @@
 # main.py
+from sqlmodel import SQLModel
+SQLModel.metadata.clear()
 import streamlit as st
 from db import init_db
 from ui.projects_panel import render_projects, render_new_project
