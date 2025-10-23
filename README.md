@@ -1,6 +1,6 @@
 <img width="350" height="350" alt="Image" src="https://github.com/user-attachments/assets/f53c9be5-61af-4433-9edc-1f519a7a0219" />
 
-# **Strivio — Project Manager**
+# **Strivio - Project Manager**
 
 Strivio is a lightweight, Streamlit-powered project manager for solo builders, students, and small teams. Create projects, add tasks and subtasks (with start/end dates, assignees, and status), and visualize timelines with a clean Plotly Gantt chart. It’s perfect for quickly organizing research, capstone projects, and MVP work without the overhead of a full PM suite.
 
