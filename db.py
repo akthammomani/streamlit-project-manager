@@ -13,7 +13,7 @@ engine = create_engine(DB_URL, future=True, echo=False)
 SessionLocal = sessionmaker(bind=engine, future=True, expire_on_commit=False)
 Base = declarative_base()
 
-TASK_STATUSES = ("Backlog", "In-Progress", "Completed")
+TASK_STATUSES = ("To-Do", "In-Progress", "Completed")
 
 class User(Base):
     __tablename__ = "users"
@@ -51,7 +51,7 @@ class Task(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), index=True, nullable=False)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    status = Column(Enum(*TASK_STATUSES, name="task_status"), default="Backlog", nullable=False)
+    status = Column(Enum(*TASK_STATUSES, name="task_status"), default="To-Do", nullable=False)
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
     assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -66,7 +66,7 @@ class SubTask(Base):
     id = Column(Integer, primary_key=True)
     task_id = Column(Integer, ForeignKey("tasks.id"), index=True, nullable=False)
     name = Column(String, nullable=False)
-    status = Column(Enum(*TASK_STATUSES, name="subtask_status"), default="Backlog", nullable=False)
+    status = Column(Enum(*TASK_STATUSES, name="subtask_status"), default="To-Do", nullable=False)
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
     assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
