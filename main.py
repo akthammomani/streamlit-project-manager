@@ -25,11 +25,11 @@ if login and email:
 if "user_id" not in st.session_state:
     st.stop()
 
-user_id = st.session_state["user_id"]
+current_user_id = st.session_state["user_id"]
 user_email = st.session_state["user_email"]
 
 st.sidebar.markdown("---")
-render_new_project(user_id)
+render_new_project(current_user_id)
 project_id = render_projects(current_user_id)
 if not project_id:
     st.stop()
