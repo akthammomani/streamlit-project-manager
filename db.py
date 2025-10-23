@@ -4,9 +4,10 @@ from datetime import datetime, date
 from typing import Optional, List, Dict
 
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Date, DateTime, ForeignKey, Enum, Float, UniqueConstraint, select
+    create_engine, Column, Integer, String, Date, DateTime, ForeignKey, Enum, Float, UniqueConstraint, select, Boolean
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload, Session
+import hashlib
 
 DB_URL = "sqlite:///data.db"
 engine = create_engine(DB_URL, future=True, echo=False)
@@ -31,7 +32,8 @@ class Project(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     owner = relationship("User")
     created_at = Column(DateTime, default=datetime.utcnow)
-
+    is_public = Column(Boolean, default=False, nullable=False)
+    pin_hash  = Column(String, nullable=True) 
     members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
     tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
 
@@ -40,10 +42,12 @@ class ProjectMember(Base):
     id = Column(Integer, primary_key=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    role = Column(String, default="member")  # owner|member
+    role = Column(String, default="viewer", nullable=False)  # owner | editor | viewer
     project = relationship("Project", back_populates="members")
     user = relationship("User")
-    __table_args__ = (UniqueConstraint("project_id", "user_id", name="uq_project_user"),)
+    __table_args__ = (UniqueConstraint("project_id", "user_id", name="uq_project_user"),
+                     CheckConstraint("role IN ('owner','editor','viewer')", name="ck_member_role"),
+                     )
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -92,20 +96,23 @@ def login(email: str, name: Optional[str] = None) -> Dict:
         user = _get_or_create_user(s, email, name)
         return {"id": user.id, "email": user.email, "name": user.name}
 
-def create_project(owner_email: str, name: str, start: date, end: date, member_emails: Optional[List[str]] = None) -> int:
+def create_project(owner_email: str, name: str, start: date, end: date,
+                   member_emails: Optional[List[str]] = None,
+                   is_public: bool = False, pin: Optional[str] = None) -> int:
     member_emails = member_emails or []
     with SessionLocal() as s:
         owner = _get_or_create_user(s, owner_email)
-        p = Project(name=name, start_date=start, end_date=end, owner_id=owner.id)
-        s.add(p)
-        s.flush()
-        # owner is a member
+        p = Project(
+            name=name, start_date=start, end_date=end, owner_id=owner.id,
+            is_public=is_public, pin_hash=None if is_public else _hash_pin(pin)
+        )
+        s.add(p); s.flush()
         s.add(ProjectMember(project_id=p.id, user_id=owner.id, role="owner"))
         for e in member_emails:
             if e and e.strip():
                 u = _get_or_create_user(s, e)
                 if u.id != owner.id:
-                    s.add(ProjectMember(project_id=p.id, user_id=u.id, role="member"))
+                    s.add(ProjectMember(project_id=p.id, user_id=u.id, role="viewer"))
         s.commit()
         return p.id
 
@@ -143,6 +150,11 @@ def add_or_update_task(project_id: int, name: str, status: str, start: Optional[
             s.add(t)
         s.commit()
         return t.id
+        
+def _hash_pin(pin: str | None) -> str | None:
+    if not pin:
+        return None
+    return hashlib.sha256(pin.encode("utf-8")).hexdigest()
 
 def delete_task(task_id: int) -> None:
     with SessionLocal() as s:
@@ -171,6 +183,30 @@ def rename_project(project_id: int, new_name: str) -> None:
         if p:
             p.name = new_name.strip()
             s.commit()
+
+def set_member_role(project_id: int, email: str, role: str = "viewer"):
+    with SessionLocal() as s:
+        u = _get_or_create_user(s, email)
+        m = s.query(ProjectMember).filter_by(project_id=project_id, user_id=u.id).one_or_none()
+        if not m:
+            m = ProjectMember(project_id=project_id, user_id=u.id, role=role)
+            s.add(m)
+        else:
+            m.role = role
+        s.commit()
+
+def get_user_role(project_id: int, email: str) -> str | None:
+    with SessionLocal() as s:
+        u = _get_or_create_user(s, email)
+        m = s.query(ProjectMember).filter_by(project_id=project_id, user_id=u.id).one_or_none()
+        return m.role if m else None
+
+def check_project_pin(project_id: int, pin: str | None) -> bool:
+    with SessionLocal() as s:
+        p = s.get(Project, project_id)
+        if not p or p.is_public:
+            return True
+        return p.pin_hash == _hash_pin(pin or "")
 
 def add_or_update_subtask(task_id: int, name: str, status: str, start: Optional[date], end: Optional[date],
                           assignee_email: Optional[str], subtask_id: Optional[int] = None,
