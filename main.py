@@ -27,6 +27,7 @@ if "user_id" not in st.session_state:
 
 current_user_id = st.session_state["user_id"]
 user_email = st.session_state["user_email"]
+st.session_state["current_user_id"] = current_user_id  
 
 st.sidebar.markdown("---")
 render_new_project(current_user_id)
