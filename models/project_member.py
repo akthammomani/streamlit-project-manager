@@ -11,9 +11,12 @@ class ProjectMember(SQLModel, table=True):
     __table_args__ = {"extend_existing": True}
 
     id: Optional[int] = Field(default=None, primary_key=True)
+
+    # ✅ Foreign keys must explicitly link to parent tables
     project_id: int = Field(foreign_key="projects.id")
     user_id: int = Field(foreign_key="users.id")
     role: str = Field(default="member")
 
+    # ✅ Proper relationships
     project: "Project" = Relationship(back_populates="members")
     user: "User" = Relationship(back_populates="memberships")
