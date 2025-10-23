@@ -2,7 +2,6 @@
 import streamlit as st
 
 def force_rerun():
-    # works on old & new Streamlit
     fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
     if fn:
         fn()
@@ -19,13 +18,13 @@ import db
 from PIL import Image
 import os
 
-
+# --- App chrome ---
 st.set_page_config(
     page_title="Strivio — Project Manager",
-    page_icon="logo_1.png",   
-    layout="wide"
+    page_icon="logo_1.png",
+    layout="wide",
+    initial_sidebar_state="collapsed"  # collapsed until login
 )
-
 
 # ---------- helpers ----------
 STATUS_OPTIONS = ["To-Do", "In Progress", "Done"]
@@ -80,40 +79,64 @@ def _init_db_once():
 
 _init_db_once()
 
-# ---------- auth (simple email "profile") ----------
-#@st.cache_data
-def load_logo(path="logo_1.png"):
-    return Image.open(path)
-    
-with st.sidebar:
-    # optional: reduce top padding
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    # center using sidebar columns
-    c1, c2, c3 = st.columns([1, 3, 1])
-    with c2:
-        st.image(load_logo(), width="stretch")  # or set width=140
-    st.markdown("---")  # separator before the rest of the sidebar
-    st.header("Profile")
-    email = st.text_input("Your email", placeholder="you@example.com")
-    name = st.text_input("Your name (optional)")
-    login_btn = st.button("Sign in / Continue", width="stretch")
+# ---------- Full-screen login (before any sidebar UI) ----------
+def full_screen_login():
+    st.markdown("""
+    <style>
+      /* Hide sidebar and the hamburger while logged out */
+      [data-testid="stSidebar"], [data-testid="baseButton-headerNoPadding"] { display: none !important; }
+      .main > div { padding-top: 6vh !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
-if login_btn:
-    if not email:
-        st.sidebar.error("Email is required.")
-    else:
-        st.session_state["user"] = db.login(email, name)
+    _, col, _ = st.columns([1, 2.2, 1])
+    with col:
+        st.markdown(
+            """
+            <div style="text-align:center;margin-bottom:18px;">
+              <img src="logo_1.png" style="width:160px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.12);" />
+              <h1 style="margin:10px 0 0 0;">Strivio</h1>
+              <p style="color:#6b7280;margin-top:4px;">Simple, visual project management.</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        with st.form("login_form", clear_on_submit=False, border=True):
+            email = st.text_input("Your email", placeholder="you@example.com")
+            name  = st.text_input("Your name (optional)")
+            submitted = st.form_submit_button("Sign in / Continue", use_container_width=True)
 
+        if submitted:
+            if not email:
+                st.warning("Please enter your email.")
+            else:
+                st.session_state["user"] = db.login(email, name)
+                force_rerun()
+
+# Gate: if no user in session, show the full-screen login and stop
 user = st.session_state.get("user")
 if not user:
-    st.info("Enter your email in the sidebar to continue.")
+    full_screen_login()
     st.stop()
 
+# ---------- Sidebar (post-login) ----------
+def load_logo(path="logo_1.png"):
+    return Image.open(path)
+
+with st.sidebar:
+    # small top spacer
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    # centered logo
+    c1, c2, c3 = st.columns([1, 3, 1])
+    with c2:
+        st.image(load_logo(), width="stretch")
+    st.caption(f"Signed in as **{user['email']}**")
+    st.markdown("---")
+
 # ---------- project selection / creation ----------
-st.sidebar.markdown("---")
 st.sidebar.subheader("Projects")
 _projects_raw = db.get_projects_for_user(user["email"])
-projects = _projects_raw  # only use id/name here
+projects = _projects_raw
 proj_names = [f'{p.id} · {p.name}' for p in projects]
 selected = st.sidebar.selectbox("Open project", options=["—"] + proj_names, index=0)
 
@@ -125,17 +148,21 @@ with st.sidebar.expander("New project"):
     with col_p2:
         p_end = st.date_input("End", value=date.today())
 
-    # NEW: privacy + PIN
+    # Privacy + PIN
     colx1, colx2 = st.columns(2)
     with colx1:
         is_public = st.checkbox("Public project (no PIN required)", value=False)
     with colx2:
-        pin_val = st.text_input("Project PIN", type="password", disabled=is_public,
-                                help="Members will need this PIN to open the project.")
+        pin_val = st.text_input(
+            "Project PIN",
+            type="password",
+            disabled=is_public,
+            help="Members will need this PIN to open the project."
+        )
 
     members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com")
 
-    if st.button("Create project", width="stretch"):
+    if st.button("Create project", use_container_width=True):
         if not p_name:
             st.warning("Please enter a project name.")
         elif p_end < p_start:
@@ -150,7 +177,6 @@ with st.sidebar.expander("New project"):
             )
             st.success(f"Project created (id {pid}).")
             force_rerun()
-
 
 # Determine current project
 current_project = None
@@ -178,10 +204,12 @@ if not getattr(current_project, "is_public", True) and not st.session_state.get(
                 st.error("Incorrect PIN.")
     st.stop()
 
+# Role flags
 role = db.get_user_role(current_project.id, user["email"]) or "viewer"
 CAN_WRITE = role in ("owner", "editor")
 IS_OWNER  = role == "owner"
 
+# Manage project (owner only)
 with st.sidebar.expander("Manage current project"):
     if IS_OWNER:
         new_name = st.text_input("Rename project", value=current_project.name, key="rename_proj")
@@ -199,20 +227,19 @@ with st.sidebar.expander("Manage current project"):
     else:
         st.caption("Only the owner can manage this project.")
 
+# ---------- Tabs ----------
 tab1, tab2, tab3 = st.tabs(["Tasks", "Gantt", "Members"])
 
 # ---------- Tasks Tab ----------
 with tab1:
     st.subheader("Tasks")
 
-    # Normalize tasks first (visible to all roles)
     tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
 
-    # Read-only banner for viewers
     if not CAN_WRITE:
         st.info("You have read-only access to this project.")
 
-    # ---------- Task Create / Edit (writers only) ----------
+    # Create / Edit Task (writers only)
     if CAN_WRITE:
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -262,7 +289,7 @@ with tab1:
                 st.success("Task saved.")
                 force_rerun()
 
-    # ---------- Task List (visible to all) ----------
+    # Tasks table (visible to all)
     if tasks:
         st.markdown("**Your Tasks**")
         task_rows = [{
@@ -278,7 +305,7 @@ with tab1:
     else:
         st.info("No tasks yet. Add your first task above." if CAN_WRITE else "No tasks yet.")
 
-    # ---------- Delete Task (writers only) ----------
+    # Delete Task (writers only)
     if CAN_WRITE and tasks:
         st.markdown("**Delete Task**")
         del_task_opt = st.selectbox(
@@ -293,9 +320,8 @@ with tab1:
 
     st.markdown("---")
 
-    # ---------- Subtasks ----------
+    # Subtasks
     st.subheader("Subtasks")
-
     task_for_sub = st.selectbox(
         "Task",
         options=[f"{t['id']} · {t['name']}" for t in tasks] if tasks else [],
@@ -376,7 +402,6 @@ with tab1:
                 st.success("Subtask deleted.")
                 force_rerun()
 
-
 # ---------- Gantt Tab ----------
 with tab2:
     st.subheader("Timeline (Gantt)")
@@ -407,18 +432,18 @@ with tab2:
         st.info("Add start/end dates to tasks or subtasks to see them on the Gantt.")
     else:
         df = pd.DataFrame(rows)
-        fig = px.timeline(df, x_start="Start", x_end="Finish", y="Item",
-                          hover_data=["Status", "Assignee", "Progress"], color="Status")
+        fig = px.timeline(
+            df, x_start="Start", x_end="Finish", y="Item",
+            hover_data=["Status", "Assignee", "Progress"], color="Status"
+        )
         fig.update_yaxes(autorange="reversed")
         fig.update_layout(margin=dict(l=20, r=20, t=30, b=30))
-        plotly_config = {"displaylogo": False,"responsive": True}
+        plotly_config = {"displaylogo": False, "responsive": True}
         st.plotly_chart(fig, width="stretch", config=plotly_config)
-        #st.plotly_chart(fig, width="stretch")
 
 # ---------- Members Tab ----------
 with tab3:
     st.subheader("Project Members")
-
     if not CAN_WRITE:
         st.info("Read-only members cannot manage users.")
     else:
@@ -435,4 +460,3 @@ with tab3:
                         _db.set_member_role(current_project.id, e, role_choice)
                 st.success(f"Added/updated {len(emails)} member(s) as {role_choice}.")
                 force_rerun()
-
