@@ -137,7 +137,7 @@ with tab1:
                 progress=float(t_prog),
             )
             st.success("Task saved.")
-            st.experimental_rerun()
+            st.rerun()
 
     # List tasks with inline actions
     if tasks:
@@ -206,7 +206,7 @@ with tab1:
                     progress=float(st_prog),
                 )
                 st.success("Subtask saved.")
-                st.experimental_rerun()
+                st.rerun()
 
         if subs:
             sub_rows = []
@@ -281,5 +281,5 @@ with tab3:
                     s.add(_db.ProjectMember(project_id=proj.id, user_id=u.id, role="member"))
             s.commit()
         st.success("Members added.")
-        st.experimental_rerun()
+        st.rerun()
 
