@@ -133,8 +133,8 @@ def full_screen_login():
     with col:
         # centered by the CSS rule above
         centered_logo("logo_1.png", width=180)
-        st.markdown("<h1 style='text-align:center;margin:10px 0 0 0;'>Strivio</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align:center;color:#6b7280;margin-top:4px;'>Simple, visual project management.</p>", unsafe_allow_html=True)
+        #st.markdown("<h1 style='text-align:center;margin:10px 0 0 0;'>Strivio</h1>", unsafe_allow_html=True)
+        #st.markdown("<p style='text-align:center;color:#6b7280;margin-top:4px;'>Simple, visual project management.</p>", unsafe_allow_html=True)
 
         with st.form("login_form", clear_on_submit=False):
             email = st.text_input("Your email", placeholder="you@example.com")
