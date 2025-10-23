@@ -81,7 +81,7 @@ def _init_db_once():
 _init_db_once()
 
 # ---------- auth (simple email "profile") ----------
-@st.cache_data
+#@st.cache_data
 def load_logo(path="logo_1.png"):
     return Image.open(path)
     
@@ -368,7 +368,10 @@ with tab2:
         fig = px.timeline(df, x_start="Start", x_end="Finish", y="Item",
                           hover_data=["Status", "Assignee", "Progress"], color="Status")
         fig.update_yaxes(autorange="reversed")
-        st.plotly_chart(fig, width="stretch")
+        fig.update_layout(margin=dict(l=20, r=20, t=30, b=30))
+        plotly_config = {"displaylogo": False,"responsive": True}
+        st.plotly_chart(fig, width="stretch", config=plotly_config)
+        #st.plotly_chart(fig, width="stretch")
 
 # ---------- Members Tab ----------
 with tab3:
