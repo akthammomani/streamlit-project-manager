@@ -23,7 +23,7 @@ st.set_page_config(
     page_title="Strivio — Project Manager",
     page_icon="logo_1.png",
     layout="wide",
-    initial_sidebar_state="collapsed"  # collapsed until login
+    initial_sidebar_state="collapsed"  # collapsed until login / project selection
 )
 
 # ---------- helpers ----------
@@ -81,9 +81,9 @@ _init_db_once()
 
 # ---------- Full-screen login (before any sidebar UI) ----------
 def full_screen_login():
+    # Hide sidebar & hamburger while logged out
     st.markdown("""
     <style>
-      /* Hide sidebar and the hamburger while logged out */
       [data-testid="stSidebar"], [data-testid="baseButton-headerNoPadding"] { display: none !important; }
       .main > div { padding-top: 6vh !important; }
     </style>
@@ -91,17 +91,12 @@ def full_screen_login():
 
     _, col, _ = st.columns([1, 2.2, 1])
     with col:
-        st.markdown(
-            """
-            <div style="text-align:center;margin-bottom:18px;">
-              <img src="logo_1.png" style="width:160px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.12);" />
-              <h1 style="margin:10px 0 0 0;">Strivio</h1>
-              <p style="color:#6b7280;margin-top:4px;">Simple, visual project management.</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        with st.form("login_form", clear_on_submit=False, border=True):
+        # Use st.image so Streamlit serves correctly
+        st.image("logo_1.png", width=160)
+        st.markdown("<h1 style='text-align:center;margin:10px 0 0 0;'>Strivio</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align:center;color:#6b7280;margin-top:4px;'>Simple, visual project management.</p>", unsafe_allow_html=True)
+
+        with st.form("login_form", clear_on_submit=False):
             email = st.text_input("Your email", placeholder="you@example.com")
             name  = st.text_input("Your name (optional)")
             submitted = st.form_submit_button("Sign in / Continue", use_container_width=True)
@@ -113,80 +108,149 @@ def full_screen_login():
                 st.session_state["user"] = db.login(email, name)
                 force_rerun()
 
-# Gate: if no user in session, show the full-screen login and stop
+# ---------- Centered project gate (stay centered until a project is chosen/created) ----------
+def full_screen_project_gate(user_email: str):
+    st.markdown("""
+    <style>
+      [data-testid="stSidebar"], [data-testid="baseButton-headerNoPadding"] { display: none !important; }
+      .main > div { padding-top: 4vh !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    projects = db.get_projects_for_user(user_email)
+
+    _, col, _ = st.columns([1, 2.6, 1])
+    with col:
+        st.image("logo_1.png", width=120)
+        st.markdown("<h2 style='text-align:center;margin-top:8px;'>Choose or Create a Project</h2>", unsafe_allow_html=True)
+
+        # Open existing
+        if projects:
+            opt = st.selectbox(
+                "Open existing project",
+                options=[f"{p.id} · {p.name}" for p in projects],
+                key="center_open_select"
+            )
+            if st.button("Open project", use_container_width=True):
+                sel_id = int(opt.split("·")[0].strip())
+                st.session_state["selected_project_id"] = sel_id
+                force_rerun()
+
+        st.markdown("---")
+
+        # Create new (same inputs as sidebar)
+        with st.form("center_new_project", clear_on_submit=True):
+            p_name = st.text_input("Project name", placeholder="AI-Powered Apple Leaf Specialist")
+            c1, c2 = st.columns(2)
+            with c1:
+                p_start = st.date_input("Start", value=date.today(), key="center_p_start")
+            with c2:
+                p_end = st.date_input("End", value=date.today(), key="center_p_end")
+            c3, c4 = st.columns(2)
+            with c3:
+                is_public = st.checkbox("Public project (no PIN required)", value=False, key="center_public")
+            with c4:
+                pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="center_pin")
+            members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="center_members")
+            submit_new = st.form_submit_button("Create project", use_container_width=True)
+
+        if submit_new:
+            if not p_name:
+                st.warning("Please enter a project name.")
+            elif p_end < p_start:
+                st.warning("End date must be after start date.")
+            elif not is_public and not pin_val:
+                st.warning("Private projects require a PIN.")
+            else:
+                members = [m.strip() for m in members_csv.split(",") if m.strip()]
+                pid = db.create_project(user_email, p_name, p_start, p_end, members, is_public=is_public, pin=(pin_val or None))
+                st.success(f"Project created (id {pid}).")
+                st.session_state["selected_project_id"] = pid
+                force_rerun()
+
+# ---------- Login gate ----------
 user = st.session_state.get("user")
 if not user:
     full_screen_login()
     st.stop()
 
-# ---------- Sidebar (post-login) ----------
+# ---------- Project gate (keep centered until a project is chosen/created) ----------
+if not st.session_state.get("selected_project_id"):
+    full_screen_project_gate(user["email"])
+    st.stop()
+
+# ---------- Sidebar (post-login & project ready) ----------
 def load_logo(path="logo_1.png"):
     return Image.open(path)
 
 with st.sidebar:
-    # small top spacer
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    # centered logo
     c1, c2, c3 = st.columns([1, 3, 1])
     with c2:
-        st.image(load_logo(), width="stretch")
+        st.image(load_logo(), use_container_width=True)
     st.caption(f"Signed in as **{user['email']}**")
     st.markdown("---")
 
-# ---------- project selection / creation ----------
-st.sidebar.subheader("Projects")
+# ---------- project selection / creation (optional switcher in sidebar) ----------
 _projects_raw = db.get_projects_for_user(user["email"])
-projects = _projects_raw
-proj_names = [f'{p.id} · {p.name}' for p in projects]
-selected = st.sidebar.selectbox("Open project", options=["—"] + proj_names, index=0)
 
-with st.sidebar.expander("New project"):
-    p_name = st.text_input("Project name", placeholder="AI-Powered Apple Leaf Specialist")
-    col_p1, col_p2 = st.columns(2)
-    with col_p1:
-        p_start = st.date_input("Start", value=date.today())
-    with col_p2:
-        p_end = st.date_input("End", value=date.today())
-
-    # Privacy + PIN
-    colx1, colx2 = st.columns(2)
-    with colx1:
-        is_public = st.checkbox("Public project (no PIN required)", value=False)
-    with colx2:
-        pin_val = st.text_input(
-            "Project PIN",
-            type="password",
-            disabled=is_public,
-            help="Members will need this PIN to open the project."
-        )
-
-    members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com")
-
-    if st.button("Create project", use_container_width=True):
-        if not p_name:
-            st.warning("Please enter a project name.")
-        elif p_end < p_start:
-            st.warning("End date must be after start date.")
-        elif not is_public and not pin_val:
-            st.warning("Private projects require a PIN.")
-        else:
-            members = [m.strip() for m in members_csv.split(",") if m.strip()]
-            pid = db.create_project(
-                user["email"], p_name, p_start, p_end, members,
-                is_public=is_public, pin=(pin_val or None)
-            )
-            st.success(f"Project created (id {pid}).")
-            force_rerun()
-
-# Determine current project
-current_project = None
-if selected != "—" and projects:
-    sel_id = int(selected.split("·")[0].strip())
-    current_project = next((p for p in projects if p.id == sel_id), None)
-
+# Build current project from remembered selection
+current_project = next((p for p in _projects_raw if p.id == st.session_state.get("selected_project_id")), None)
 if not current_project:
-    st.info("Create or open a project from the sidebar.")
-    st.stop()
+    # session lost or project removed; go back to gate
+    st.session_state["selected_project_id"] = None
+    force_rerun()
+
+with st.sidebar:
+    st.subheader("Projects")
+    proj_names = [f'{p.id} · {p.name}' for p in _projects_raw]
+    # preselect current project
+    try:
+        default_label = f"{current_project.id} · {current_project.name}"
+        idx = 0 if not proj_names else max(0, proj_names.index(default_label))
+    except ValueError:
+        idx = 0
+    chosen = st.selectbox("Open project", options=proj_names, index=idx, key="sidebar_project_select")
+    chosen_id = int(chosen.split("·")[0].strip())
+    if chosen_id != current_project.id:
+        st.session_state["selected_project_id"] = chosen_id
+        force_rerun()
+
+    with st.expander("New project"):
+        p_name = st.text_input("Project name", placeholder="AI-Powered Apple Leaf Specialist", key="sb_p_name")
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            p_start = st.date_input("Start", value=date.today(), key="sb_p_start")
+        with col_p2:
+            p_end = st.date_input("End", value=date.today(), key="sb_p_end")
+
+        colx1, colx2 = st.columns(2)
+        with colx1:
+            is_public = st.checkbox("Public project (no PIN required)", value=False, key="sb_public")
+        with colx2:
+            pin_val = st.text_input(
+                "Project PIN", type="password", disabled=is_public, key="sb_pin",
+                help="Members will need this PIN to open the project."
+            )
+
+        members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="sb_members")
+
+        if st.button("Create project", use_container_width=True, key="sb_create"):
+            if not p_name:
+                st.warning("Please enter a project name.")
+            elif p_end < p_start:
+                st.warning("End date must be after start date.")
+            elif not is_public and not pin_val:
+                st.warning("Private projects require a PIN.")
+            else:
+                members = [m.strip() for m in members_csv.split(",") if m.strip()]
+                pid = db.create_project(
+                    user["email"], p_name, p_start, p_end, members,
+                    is_public=is_public, pin=(pin_val or None)
+                )
+                st.session_state["selected_project_id"] = pid
+                st.success(f"Project created (id {pid}).")
+                force_rerun()
 
 st.title(current_project.name)
 st.caption(f"{current_project.start_date} → {current_project.end_date}")
@@ -223,6 +287,8 @@ with st.sidebar.expander("Manage current project"):
             if st.button("Delete project", type="secondary", key="delete_project_btn"):
                 db.delete_project(current_project.id)
                 st.success("Project deleted.")
+                # clear selection and return to project gate
+                st.session_state["selected_project_id"] = None
                 force_rerun()
     else:
         st.caption("Only the owner can manage this project.")
