@@ -139,7 +139,7 @@ def full_screen_login():
         with st.form("login_form", clear_on_submit=False):
             email = st.text_input("Your email", placeholder="you@example.com")
             name  = st.text_input("Your name (optional)")
-            submitted = st.form_submit_button("Sign in / Continue", use_container_width=True)
+            submitted = st.form_submit_button("Sign in / Continue", width='stretch')
 
         if submitted:
             if not email:
@@ -172,7 +172,7 @@ def full_screen_project_gate(user_email: str):
                 options=[f"{p.id} · {p.name}" for p in projects],
                 key="center_open_select"
             )
-            if st.button("Open project", use_container_width=True):
+            if st.button("Open project", width='stretch'):
                 sel_id = int(opt.split("·")[0].strip())
                 st.session_state["selected_project_id"] = sel_id
                 force_rerun()
@@ -193,7 +193,7 @@ def full_screen_project_gate(user_email: str):
             with c4:
                 pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="center_pin")
             members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="center_members")
-            submit_new = st.form_submit_button("Create project", use_container_width=True)
+            submit_new = st.form_submit_button("Create project", width='stretch')
 
         if submit_new:
             if not p_name:
@@ -228,7 +228,7 @@ with st.sidebar:
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 3, 1])
     with c2:
-        st.image(load_logo(), use_container_width=True)
+        st.image(load_logo(), width='stretch')
     st.caption(f"Signed in as **{user['email']}**")
     st.markdown("---")
 
@@ -276,7 +276,7 @@ with st.sidebar:
 
         members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="sb_members")
 
-        if st.button("Create project", use_container_width=True, key="sb_create"):
+        if st.button("Create project", width='stretch', key="sb_create"):
             if not p_name:
                 st.warning("Please enter a project name.")
             elif p_end < p_start:
@@ -571,7 +571,7 @@ with tab2:
          )
         st.plotly_chart(
                         fig,
-                        width="stretch",                  # replaces the old use_container_width=True
+                        width="stretch",                  # replaces the old width='stretch'
                        # config={
                              #   "displayModeBar": False,
                             #    "scrollZoom": True,
