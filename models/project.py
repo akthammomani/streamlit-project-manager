@@ -22,3 +22,4 @@ class Project(SQLModel, table=True):
 
     members: List["ProjectMember"] = Relationship(back_populates="project")
     tasks: List["Task"] = Relationship(back_populates="project")
+
