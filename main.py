@@ -30,7 +30,7 @@ user_email = st.session_state["user_email"]
 
 st.sidebar.markdown("---")
 render_new_project(user_id)
-project_id = render_projects(user_id)
+project_id = render_projects(current_user_id)
 if not project_id:
     st.stop()
 
