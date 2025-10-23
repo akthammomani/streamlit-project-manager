@@ -539,14 +539,33 @@ with tab2:
         st.info("Add start/end dates to tasks or subtasks to see them on the Gantt.")
     else:
         df = pd.DataFrame(rows)
+        df["Status"] = df["Status"].replace({
+        "In-Progress": "In Progress",
+        "in-pogress": "In Progress",
+        "todo": "To-Do",
+        "to do": "To-Do",
+        "done": "Done"
+       })
+
+        status_colors = {
+        "To-Do":      "#F59E0B",  # orange/amber
+        "In Progress":"#2563EB",  # blue
+        "Done":       "#10B981",  # green
+        }
+        
         fig = px.timeline(
-            df, x_start="Start", x_end="Finish", y="Item",
-            hover_data=["Status", "Assignee", "Progress"], color="Status"
+            df,
+            x_start="Start",
+            x_end="Finish",
+            y="Item",
+            color="Status",
+            hover_data=["Status", "Assignee", "Progress"],
+            color_discrete_map=status_colors,
         )
         #fig.update_yaxes(autorange="reversed")
         fig.update_layout(margin=dict(l=20, r=20, t=30, b=30))
         plotly_config = {"displaylogo": False, "responsive": True}
-        st.plotly_chart(fig, width="stretch", config=plotly_config)
+        st.plotly_chart(fig, width="stretch", config={"displaylogo": False, "responsive": True})
 
 # ---------- Members Tab ----------
 with tab3:
