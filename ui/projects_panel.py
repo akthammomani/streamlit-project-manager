@@ -9,20 +9,36 @@ from models.project_member import ProjectMember
 from models.user import User
 from models.task import Task
 
-def render_projects(current_user_id: int):
+def render_projects(current_user_id: int = None):
+    import streamlit as st
+    from sqlmodel import select
+    from db import get_session
+    from models.project_member import ProjectMember
+    from models.project import Project
+
+    # ✅ Fallback if rerun loses local variable
+    if current_user_id is None:
+        current_user_id = st.session_state.get("current_user_id")
+
     st.subheader("Projects (only ones you belong to)")
     with get_session() as s:
         memberships = s.exec(
             select(ProjectMember).where(ProjectMember.user_id == current_user_id)
         ).all()
         project_ids = [m.project_id for m in memberships]
-        projects = s.exec(
-            select(Project).where(Project.id.in_(project_ids)).order_by(Project.id.desc())
-        ).all() if project_ids else []
-    project_map = {f"{p.name} (#{p.id})": p.id for p in projects}
-    selected_label = st.selectbox("Select a project", ["—"] + list(project_map.keys()))
-    selected_project_id = project_map.get(selected_label)
-    return selected_project_id
+        projects = (
+            s.exec(select(Project).where(Project.id.in_(project_ids))).all()
+            if project_ids else []
+        )
+
+    if not projects:
+        st.info("You don't belong to any projects yet.")
+        return None
+
+    proj_options = {f"{p.name} (#{p.id})": p.id for p in projects}
+    selected_label = st.selectbox("Select a project", ["—"] + list(proj_options.keys()))
+    return proj_options.get(selected_label)
+
 
 def render_new_project(current_user_id: int):
     st.subheader("New Project")
