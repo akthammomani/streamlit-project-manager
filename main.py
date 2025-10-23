@@ -16,6 +16,8 @@ import plotly.express as px
 
 import db
 
+import base64
+
 st.set_page_config(page_title="Project Manager", layout="wide")
 
 # ---------- helpers ----------
@@ -72,7 +74,13 @@ def _init_db_once():
 _init_db_once()
 
 # ---------- auth (simple email "profile") ----------
+def _img_tag(path="logo.jpg", w=140):
+    b64 = base64.b64encode(open(path, "rb").read()).decode()
+    return f"<img src='data:image/jpg;base64,{b64}' style='display:block;margin:0 auto;width:{w}px;'>"
+    
 with st.sidebar:
+    st.markdown(_img_tag(), unsafe_allow_html=True)
+    st.markdown("---")
     st.header("Profile")
     email = st.text_input("Your email", placeholder="you@example.com")
     name = st.text_input("Your name (optional)")
