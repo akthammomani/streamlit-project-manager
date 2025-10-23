@@ -96,8 +96,7 @@ if not user:
 st.sidebar.markdown("---")
 st.sidebar.subheader("Projects")
 _projects_raw = db.get_projects_for_user(user["email"])
-# keep projects as-is (ORM ok) since we only use id/name below
-projects = _projects_raw
+projects = _projects_raw  # only use id/name here
 proj_names = [f'{p.id} · {p.name}' for p in projects]
 selected = st.sidebar.selectbox("Open project", options=["—"] + proj_names, index=0)
 
@@ -208,6 +207,19 @@ with tab1:
     else:
         st.info("No tasks yet. Add your first task above.")
 
+    # --- DELETE TASK UI ---
+    st.markdown("**Delete Task**")
+    if tasks:
+        del_task_opt = st.selectbox(
+            "Select task to delete",
+            [f"{t['id']} · {t['name']}" for t in tasks],
+            key="del_task_opt"
+        )
+        if st.button("Delete Task", type="secondary", key="del_task_btn"):
+            db.delete_task(int(del_task_opt.split("·")[0].strip()))
+            st.success("Task deleted.")
+            force_rerun()
+
     st.markdown("---")
     # Subtasks UI
     st.subheader("Subtasks")
@@ -275,6 +287,19 @@ with tab1:
                     "Progress%": round(s["progress"], 1)
                 })
             st.dataframe(pd.DataFrame(sub_rows), use_container_width=True, hide_index=True)
+
+        # --- DELETE SUBTASK UI ---
+        st.markdown("**Delete Subtask**")
+        if subs:
+            del_sub_opt = st.selectbox(
+                "Select subtask to delete",
+                [f"{s['id']} · {s['name']}" for s in subs],
+                key="del_sub_opt"
+            )
+            if st.button("Delete Subtask", type="secondary", key="del_sub_btn"):
+                db.delete_subtask(int(del_sub_opt.split("·")[0].strip()))
+                st.success("Subtask deleted.")
+                force_rerun()
 
 # ---------- Gantt Tab ----------
 with tab2:
