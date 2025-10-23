@@ -1,16 +1,12 @@
 # db.py
-import os
-import streamlit as st
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import SQLModel, create_engine, Session
+import os, streamlit as st
 
-# ✅ Use environment variable or default SQLite
-#DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///pm.db")
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///pm_v2.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///pm.db")
 
 @st.cache_resource
 def get_engine():
-    """Return a cached SQLAlchemy engine for Streamlit."""
-    return create_engine(DATABASE_URL, echo=False)
+    return create_engine(DATABASE_URL, echo=True)  
 
 def get_session():
     """Create a new SQLModel session."""
