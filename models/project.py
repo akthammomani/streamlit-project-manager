@@ -1,3 +1,4 @@
+# models/project.py
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List, TYPE_CHECKING
 import os
@@ -9,8 +10,9 @@ if TYPE_CHECKING:
     from models.project_member import ProjectMember
 
 class Project(SQLModel, table=True):
-    __tablename__ = "users"
+    __tablename__ = "projects"
     __table_args__ = {"extend_existing": True}
+
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     description: Optional[str] = None
