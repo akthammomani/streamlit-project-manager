@@ -7,6 +7,8 @@ from models.subtask import Subtask
 from models.task_assignee import TaskAssignee
 
 class Task(SQLModel, table=True):
+    __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
     id: Optional[int] = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="project.id")
     title: str
