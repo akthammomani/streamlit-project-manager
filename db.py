@@ -158,6 +158,20 @@ def delete_subtask(subtask_id: int) -> None:
             s.delete(st)
             s.commit()
 
+def delete_project(project_id: int) -> None:
+    with SessionLocal() as s:
+        p = s.get(Project, project_id)
+        if p:
+            s.delete(p)  # cascades to tasks/subtasks via relationship cascade
+            s.commit()
+
+def rename_project(project_id: int, new_name: str) -> None:
+    with SessionLocal() as s:
+        p = s.get(Project, project_id)
+        if p:
+            p.name = new_name.strip()
+            s.commit()
+
 def add_or_update_subtask(task_id: int, name: str, status: str, start: Optional[date], end: Optional[date],
                           assignee_email: Optional[str], subtask_id: Optional[int] = None,
                           progress: float = 0.0) -> int:
