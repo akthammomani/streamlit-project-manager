@@ -1,11 +1,12 @@
-# models/project.py
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 import os
 from datetime import date
-from models.user import User
-from models.task import Task
-from models.project_member import ProjectMember
+
+if TYPE_CHECKING:
+    from models.user import User
+    from models.task import Task
+    from models.project_member import ProjectMember
 
 class Project(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
