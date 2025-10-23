@@ -11,7 +11,7 @@ class Subtask(SQLModel, table=True):
     __table_args__ = {"extend_existing": True}
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    task_id: int = Field(foreign_key="tasks.id")
+    task_id: int = Field(foreign_key="subtasks.id")
     title: str
     start_date: Optional[date] = None
     end_date: Optional[date] = None
