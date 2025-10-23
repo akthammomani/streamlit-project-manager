@@ -5,9 +5,8 @@ import os
 from datetime import date
 
 if TYPE_CHECKING:
-    from models.user import User
-    from models.task import Task
     from models.project_member import ProjectMember
+    from models.task import Task
 
 class Project(SQLModel, table=True):
     __tablename__ = "projects"
@@ -22,4 +21,3 @@ class Project(SQLModel, table=True):
 
     members: List["ProjectMember"] = Relationship(back_populates="project")
     tasks: List["Task"] = Relationship(back_populates="project")
-
