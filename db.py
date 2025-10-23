@@ -4,9 +4,9 @@ from datetime import datetime, date
 from typing import Optional, List, Dict
 
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Date, DateTime, ForeignKey, Enum, Float, UniqueConstraint
+    create_engine, Column, Integer, String, Date, DateTime, ForeignKey, Enum, Float, UniqueConstraint, select
 )
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload, Session
 
 DB_URL = "sqlite:///data.db"
 engine = create_engine(DB_URL, future=True, echo=False)
@@ -172,21 +172,63 @@ def add_or_update_subtask(task_id: int, name: str, status: str, start: Optional[
         return st.id
 
 def get_tasks_for_project(project_id: int):
+    """Return plain dicts to avoid detached lazy loads."""
     with SessionLocal() as s:
-        return (
-            s.query(Task)
-            .options(joinedload(Task.assignee))        # <- eager load
+        rows = (
+            s.query(
+                Task.id,
+                Task.name,
+                Task.status,
+                Task.start_date,
+                Task.end_date,
+                Task.progress,
+                User.email.label("assignee_email"),
+            )
+            .outerjoin(User, Task.assignee_id == User.id)
             .filter(Task.project_id == project_id)
             .order_by(Task.id.desc())
             .all()
         )
+        return [
+            {
+                "id": r.id,
+                "name": r.name,
+                "status": r.status,
+                "start_date": r.start_date,
+                "end_date": r.end_date,
+                "progress": float(r.progress or 0),
+                "assignee_email": r.assignee_email,
+            }
+            for r in rows
+        ]
 
 def get_subtasks_for_task(task_id: int):
+    """Return plain dicts to avoid detached lazy loads."""
     with SessionLocal() as s:
-        return (
-            s.query(SubTask)
-            .options(joinedload(SubTask.assignee))     # <- eager load
+        rows = (
+            s.query(
+                SubTask.id,
+                SubTask.name,
+                SubTask.status,
+                SubTask.start_date,
+                SubTask.end_date,
+                SubTask.progress,
+                User.email.label("assignee_email"),
+            )
+            .outerjoin(User, SubTask.assignee_id == User.id)
             .filter(SubTask.task_id == task_id)
             .order_by(SubTask.id.asc())
             .all()
         )
+        return [
+            {
+                "id": r.id,
+                "name": r.name,
+                "status": r.status,
+                "start_date": r.start_date,
+                "end_date": r.end_date,
+                "progress": float(r.progress or 0),
+                "assignee_email": r.assignee_email,
+            }
+            for r in rows
+        ]
