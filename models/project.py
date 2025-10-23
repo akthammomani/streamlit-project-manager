@@ -19,5 +19,12 @@ class Project(SQLModel, table=True):
     end_date: Optional[date] = None
     join_code: str = Field(default_factory=lambda: os.urandom(3).hex(), index=True)
 
-    members: List["ProjectMember"] = Relationship(back_populates="project")
-    tasks: List["Task"] = Relationship(back_populates="project")
+    # ✅ Relationship setup (back_populates must match)
+    members: List["ProjectMember"] = Relationship(
+        back_populates="project",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    tasks: List["Task"] = Relationship(
+        back_populates="project",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
