@@ -28,7 +28,7 @@ st.set_page_config(
 
 
 # ---------- helpers ----------
-STATUS_OPTIONS = ["To-Do", "In-Progress", "Completed"]
+STATUS_OPTIONS = ["To-Do", "In Progress", "Done"]
 
 def parse_date(x):
     if not x:
