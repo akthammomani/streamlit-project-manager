@@ -1,7 +1,5 @@
-streamlit>=1.35
-sqlmodel>=0.0.16
-pandas>=2.0
-plotly>=5.20
-sendgrid>=6.10.0
-streamlit-authenticator>=0.2.2
-python-dotenv>=1.0
+streamlit>=1.38.0
+plotly>=5.24.1
+pandas>=2.2.2
+SQLAlchemy>=2.0.32
+python-dateutil>=2.9.0.post0
