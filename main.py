@@ -37,6 +37,9 @@ def _init_db_once():
 
 _init_db_once()
 
+with st.sidebar:
+    st.caption(f"Streamlit v{st.__version__}")
+
 # ---------- auth (simple email "profile") ----------
 with st.sidebar:
     st.header("Profile")
