@@ -22,7 +22,7 @@ import os
 
 st.set_page_config(
     page_title="Strivio — Project Manager",
-    page_icon="logo.png",   
+    page_icon="logo_1.png",   
     layout="wide"
 )
 
