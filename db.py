@@ -1,13 +1,15 @@
 # db.py
-import os
 from __future__ import annotations
+
+import os
 from datetime import datetime, date
 from typing import Optional, List, Dict
 
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Date, DateTime, ForeignKey, Enum, Float, UniqueConstraint, select, Boolean, CheckConstraint, text
+    create_engine, Column, Integer, String, Date, DateTime, ForeignKey,
+    Enum, Float, UniqueConstraint, Boolean, CheckConstraint, text
 )
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload, Session
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session
 import hashlib
 
 #DB_URL = "sqlite:///data.db"
