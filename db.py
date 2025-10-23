@@ -4,7 +4,8 @@ import streamlit as st
 from sqlmodel import SQLModel, Session, create_engine
 
 # ✅ Use environment variable or default SQLite
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///pm.db")
+#DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///pm.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///pm_v2.db")
 
 @st.cache_resource
 def get_engine():
