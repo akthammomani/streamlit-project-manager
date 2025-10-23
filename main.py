@@ -548,11 +548,11 @@ with tab2:
        })
 
         status_colors = {
-        "To-Do":      "#F59E0B",  # orange/amber
+        "To-Do":      "#9CA3AF",  # Gray
         "In Progress":"#2563EB",  # blue
         "Done":       "#10B981",  # green
         }
-        
+       
         fig = px.timeline(
             df,
             x_start="Start",
