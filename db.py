@@ -171,10 +171,22 @@ def add_or_update_subtask(task_id: int, name: str, status: str, start: Optional[
         s.commit()
         return st.id
 
-def get_tasks_for_project(project_id: int) -> List[Task]:
+def get_tasks_for_project(project_id: int):
     with SessionLocal() as s:
-        return s.query(Task).filter(Task.project_id == project_id).order_by(Task.id.desc()).all()
+        return (
+            s.query(Task)
+            .options(joinedload(Task.assignee))        # <- eager load
+            .filter(Task.project_id == project_id)
+            .order_by(Task.id.desc())
+            .all()
+        )
 
-def get_subtasks_for_task(task_id: int) -> List[SubTask]:
+def get_subtasks_for_task(task_id: int):
     with SessionLocal() as s:
-        return s.query(SubTask).filter(SubTask.task_id == task_id).order_by(SubTask.id.asc()).all()
+        return (
+            s.query(SubTask)
+            .options(joinedload(SubTask.assignee))     # <- eager load
+            .filter(SubTask.task_id == task_id)
+            .order_by(SubTask.id.asc())
+            .all()
+        )
