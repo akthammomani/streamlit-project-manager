@@ -572,12 +572,12 @@ with tab2:
         st.plotly_chart(
                         fig,
                         width="stretch",                  # replaces the old use_container_width=True
-                        config={
-                                "displayModeBar": False,
-                                "scrollZoom": True,
+                       # config={
+                             #   "displayModeBar": False,
+                            #    "scrollZoom": True,
                             # optional: hide some modebar buttons
                             # "modeBarButtonsToRemove": ["toImage", "zoom2d", "select2d", "lasso2d", "resetScale2d"],
-                        },
+                       # },
                     )
 
 # ---------- Members Tab ----------
