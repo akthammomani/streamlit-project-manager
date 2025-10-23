@@ -18,6 +18,34 @@ import db
 from PIL import Image
 import os
 
+import base64
+from pathlib import Path
+
+def centered_logo(path: str = "logo_1.png", width: int = 160) -> None:
+    """
+    Renders a centered logo using base64 (works regardless of Streamlit wrappers).
+    Falls back to st.image if the file can't be read.
+    """
+    p = Path(path)
+    if not p.is_file():
+        # try relative to this file
+        p = Path(__file__).with_name(path)
+
+    try:
+        b64 = base64.b64encode(p.read_bytes()).decode("utf-8")
+        html = (
+            f'<div style="text-align:center;">'
+            f'<img src="data:image/png;base64,{b64}" '
+            f'style="width:{width}px;max-width:100%;height:auto;" />'
+            f'</div>'
+        )
+        st.markdown(html, unsafe_allow_html=True)
+    except Exception:
+        # graceful fallback if file missing
+        st.image(str(p), width=width, caption=None)
+
+
+
 # --- App chrome ---
 st.set_page_config(
     page_title="Strivio — Project Manager",
@@ -104,7 +132,7 @@ def full_screen_login():
     _, col, _ = st.columns([1, 2.2, 1])
     with col:
         # centered by the CSS rule above
-        st.image("logo_1.png", width=160)
+        centered_logo("logo_1.png", width=180)
         st.markdown("<h1 style='text-align:center;margin:10px 0 0 0;'>Strivio</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align:center;color:#6b7280;margin-top:4px;'>Simple, visual project management.</p>", unsafe_allow_html=True)
 
@@ -134,7 +162,7 @@ def full_screen_project_gate(user_email: str):
     _, col, _ = st.columns([1, 2.6, 1])
     with col:
         # centered by the CSS rule above
-        st.image("logo_1.png", width=120)
+        centered_logo("logo_1.png", width=140)
         st.markdown("<h2 style='text-align:center;margin-top:8px;'>Choose or Create a Project</h2>", unsafe_allow_html=True)
 
         # Open existing
