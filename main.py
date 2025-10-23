@@ -97,24 +97,6 @@ projects = _projects_raw  # only use id/name here
 proj_names = [f'{p.id} · {p.name}' for p in projects]
 selected = st.sidebar.selectbox("Open project", options=["—"] + proj_names, index=0)
 
-with st.sidebar.expander("Manage current project"):
-    if current_project:
-        new_name = st.text_input("Rename project", value=current_project.name, key="rename_proj")
-        colA, colB = st.columns(2)
-        with colA:
-            if st.button("Save name"):
-                db.rename_project(current_project.id, new_name)
-                st.success("Project renamed.")
-                force_rerun()
-        with colB:
-            if st.button("Delete project", type="secondary"):
-                db.delete_project(current_project.id)
-                st.success("Project deleted.")
-                force_rerun()
-    else:
-        st.caption("Open a project first.")
-
-
 with st.sidebar.expander("New project"):
     p_name = st.text_input("Project name", placeholder="AI-Powered Apple Leaf Specialist")
     col_p1, col_p2 = st.columns(2)
@@ -146,6 +128,23 @@ if not current_project:
 
 st.title(current_project.name)
 st.caption(f"{current_project.start_date} → {current_project.end_date}")
+
+with st.sidebar.expander("Manage current project"):
+    if current_project:
+        new_name = st.text_input("Rename project", value=current_project.name, key="rename_proj")
+        colA, colB = st.columns(2)
+        with colA:
+            if st.button("Save name"):
+                db.rename_project(current_project.id, new_name)
+                st.success("Project renamed.")
+                force_rerun()
+        with colB:
+            if st.button("Delete project", type="secondary"):
+                db.delete_project(current_project.id)
+                st.success("Project deleted.")
+                force_rerun()
+    else:
+        st.caption("Open a project first.")
 
 tab1, tab2, tab3 = st.tabs(["Tasks", "Gantt", "Members"])
 
