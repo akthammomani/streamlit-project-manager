@@ -13,7 +13,7 @@ engine = create_engine(DB_URL, future=True, echo=False)
 SessionLocal = sessionmaker(bind=engine, future=True, expire_on_commit=False)
 Base = declarative_base()
 
-TASK_STATUSES = ("To-Do", "In-Progress", "Completed")
+TASK_STATUSES = ("To-Do", "In Progress", "Done")
 
 class User(Base):
     __tablename__ = "users"
