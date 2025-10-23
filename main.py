@@ -1,5 +1,13 @@
 # main.py
 import streamlit as st
+def force_rerun():
+    # works on old & new Streamlit
+    fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
+    if fn:
+        fn()
+    else:
+        st.warning("Unable to rerun: your Streamlit version is too old.")
+        
 import pandas as pd
 from datetime import date
 from dateutil import parser
