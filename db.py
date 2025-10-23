@@ -3,33 +3,27 @@ import os
 import streamlit as st
 from sqlmodel import SQLModel, Session, create_engine
 
-# ✅ Use environment variable or default to local SQLite
+# ✅ Use environment variable or default SQLite
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///pm.db")
 
 @st.cache_resource
 def get_engine():
-    """Return a cached SQLAlchemy engine (avoids reconnecting each reload)."""
+    """Return a cached SQLAlchemy engine for Streamlit."""
     return create_engine(DATABASE_URL, echo=False)
 
 def get_session():
-    """Get a new SQLModel Session."""
+    """Create a new SQLModel session."""
     return Session(get_engine())
 
 def init_db():
-    """Initialize database once — safe for Streamlit hot reload."""
-    from models import (
-        project,
-        project_member,
-        user,
-        task,
-        subtask,
-        task_assignee,
-    )  # ✅ ensure all models are imported before table creation
+    """Initialize database (create tables once)."""
+    # ✅ Import all models explicitly to register them
+    import models  # triggers import of all models from __init__.py
 
     engine = get_engine()
 
-    # ✅ FIX: clear metadata before creating tables (prevents InvalidRequestError)
+    # ✅ Clear old metadata to prevent redefinition errors
     SQLModel.metadata.clear()
 
-    # ✅ create_all only once
+    # ✅ Create all tables
     SQLModel.metadata.create_all(engine, checkfirst=True)
