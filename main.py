@@ -91,12 +91,12 @@ with st.sidebar:
     # center using sidebar columns
     c1, c2, c3 = st.columns([1, 3, 1])
     with c2:
-        st.image(load_logo(), use_container_width=True)  # or set width=140
+        st.image(load_logo(), width="stretch")  # or set width=140
     st.markdown("---")  # separator before the rest of the sidebar
     st.header("Profile")
     email = st.text_input("Your email", placeholder="you@example.com")
     name = st.text_input("Your name (optional)")
-    login_btn = st.button("Sign in / Continue", use_container_width=True)
+    login_btn = st.button("Sign in / Continue", width="stretch")
 
 if login_btn:
     if not email:
@@ -125,7 +125,7 @@ with st.sidebar.expander("New project"):
     with col_p2:
         p_end = st.date_input("End", value=date.today())
     members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com")
-    if st.button("Create project", use_container_width=True):
+    if st.button("Create project", width="stretch"):
         if not p_name:
             st.warning("Please enter a project name.")
         elif p_end < p_start:
@@ -237,7 +237,7 @@ with tab1:
                 "Assignee": t["assignee_email"],
                 "Progress%": round(t["progress"], 1)
             })
-        st.dataframe(pd.DataFrame(task_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(task_rows), width="stretch", hide_index=True)
     else:
         st.info("No tasks yet. Add your first task above.")
 
@@ -320,7 +320,7 @@ with tab1:
                     "Assignee": s["assignee_email"],
                     "Progress%": round(s["progress"], 1)
                 })
-            st.dataframe(pd.DataFrame(sub_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(sub_rows), width="stretch", hide_index=True)
 
         # --- DELETE SUBTASK UI ---
         st.markdown("**Delete Subtask**")
@@ -368,7 +368,7 @@ with tab2:
         fig = px.timeline(df, x_start="Start", x_end="Finish", y="Item",
                           hover_data=["Status", "Assignee", "Progress"], color="Status")
         fig.update_yaxes(autorange="reversed")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 # ---------- Members Tab ----------
 with tab3:
