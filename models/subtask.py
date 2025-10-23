@@ -20,3 +20,4 @@ class Subtask(SQLModel, table=True):
     assignee_email: Optional[str] = None
 
     task: "Task" = Relationship(back_populates="subtasks")
+
