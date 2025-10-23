@@ -26,6 +26,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed"  # collapsed until login / project selection
 )
 
+# Center all st.image images globally
+st.markdown("""
+<style>
+  /* center images rendered by st.image */
+  [data-testid="stImage"] img { 
+    display: block; 
+    margin-left: auto; 
+    margin-right: auto; 
+  }
+</style>
+""", unsafe_allow_html=True)
+
+
 # ---------- helpers ----------
 STATUS_OPTIONS = ["To-Do", "In Progress", "Done"]
 
