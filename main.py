@@ -565,20 +565,9 @@ with tab2:
         )
         #fig.update_yaxes(autorange="reversed")
         
-        fig.update_layout(
-        margin=dict(l=20, r=20, t=30, b=30),
-        legend_title_text="Status",
-         )
-        st.plotly_chart(
-                        fig,
-                        width="stretch",                  # replaces the old width='stretch'
-                       # config={
-                             #   "displayModeBar": False,
-                            #    "scrollZoom": True,
-                            # optional: hide some modebar buttons
-                            # "modeBarButtonsToRemove": ["toImage", "zoom2d", "select2d", "lasso2d", "resetScale2d"],
-                       # },
-                    )
+        fig.update_layout(margin=dict(l=20, r=20, t=30, b=30),legend_title_text="Status")
+        plotly_config = {"displaylogo": False,"responsive": True}
+        st.plotly_chart(fig, width="stretch", config=plotly_config)
 
 # ---------- Members Tab ----------
 with tab3:
