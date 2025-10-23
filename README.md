@@ -1,4 +1,7 @@
-<img width="350" height="350" alt="Image" src="https://github.com/user-attachments/assets/f53c9be5-61af-4433-9edc-1f519a7a0219" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/f53c9be5-61af-4433-9edc-1f519a7a0219"
+       alt="Strivio logo" width="350" height="350" />
+</p>
 
 # **Strivio - Project Manager**
 
