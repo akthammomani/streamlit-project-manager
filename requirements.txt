@@ -3,3 +3,4 @@ plotly>=5.24.1
 pandas>=2.2.2
 SQLAlchemy>=2.0.32
 python-dateutil>=2.9.0.post0
+psycopg2-binary>=2.9
