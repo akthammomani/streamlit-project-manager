@@ -48,7 +48,7 @@ def centered_logo(path: str = "logo_1.png", width: int = 160) -> None:
 
 # --- App chrome ---
 st.set_page_config(
-    page_title="Strivio — Project Manager",
+    page_title="Strivio - Project Manager",
     page_icon="logo_1.png",
     layout="wide",
     initial_sidebar_state="collapsed"  # collapsed until login / project selection
