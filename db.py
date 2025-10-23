@@ -4,7 +4,7 @@ from datetime import datetime, date
 from typing import Optional, List, Dict
 
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Date, DateTime, ForeignKey, Enum, Float, UniqueConstraint, select, Boolean
+    create_engine, Column, Integer, String, Date, DateTime, ForeignKey, Enum, Float, UniqueConstraint, select, Boolean, CheckConstraint, text
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload, Session
 import hashlib
