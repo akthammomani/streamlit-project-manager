@@ -543,7 +543,7 @@ with tab2:
             df, x_start="Start", x_end="Finish", y="Item",
             hover_data=["Status", "Assignee", "Progress"], color="Status"
         )
-        fig.update_yaxes(autorange="reversed")
+        #fig.update_yaxes(autorange="reversed")
         fig.update_layout(margin=dict(l=20, r=20, t=30, b=30))
         plotly_config = {"displaylogo": False, "responsive": True}
         st.plotly_chart(fig, width="stretch", config=plotly_config)
