@@ -23,3 +23,4 @@ class Task(SQLModel, table=True):
     project: "Project" = Relationship(back_populates="tasks")
     subtasks: List["Subtask"] = Relationship(back_populates="task")
     assignees: List["TaskAssignee"] = Relationship(back_populates="task")
+
