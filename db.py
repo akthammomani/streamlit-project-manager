@@ -1,4 +1,5 @@
 # db.py
+import os
 from __future__ import annotations
 from datetime import datetime, date
 from typing import Optional, List, Dict
@@ -9,9 +10,14 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload, Session
 import hashlib
 
-DB_URL = "sqlite:///data.db"
-engine = create_engine(DB_URL, future=True, echo=False)
-SessionLocal = sessionmaker(bind=engine, future=True, expire_on_commit=False)
+#DB_URL = "sqlite:///data.db"
+#engine = create_engine(DB_URL, future=True, echo=False)
+#SessionLocal = sessionmaker(bind=engine, future=True, expire_on_commit=False)
+#Base = declarative_base()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///strivio.db")
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
 Base = declarative_base()
 
 TASK_STATUSES = ("To-Do", "In Progress", "Done")
