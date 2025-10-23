@@ -232,3 +232,11 @@ def get_subtasks_for_task(task_id: int):
             }
             for r in rows
         ]
+
+def delete_subtask(subtask_id: int) -> None:
+    with SessionLocal() as s:
+        st = s.get(SubTask, subtask_id)
+        if st:
+            s.delete(st)
+            s.commit()
+
