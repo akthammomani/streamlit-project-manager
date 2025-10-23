@@ -76,7 +76,7 @@ _init_db_once()
 
 # ---------- auth (simple email "profile") ----------
 @st.cache_data
-def load_logo(path="logo.jpg"):
+def load_logo(path="logo_1.png"):
     return Image.open(path)
     
 with st.sidebar:
