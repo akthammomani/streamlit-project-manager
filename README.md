@@ -57,22 +57,22 @@ Strivio is a lightweight, Streamlit-powered project manager for solo builders, s
 
 ## **How to Use**
 * Create / Open a Project
- * In the sidebar, open New project → set Name, Start, End, and optional member emails (comma-separated).
- * Your project appears in Open project. Select it to load.
+  * In the sidebar, open New project → set Name, Start, End, and optional member emails (comma-separated).
+  * Your project appears in Open project. Select it to load.
 
 * Manage Members
- * Go to the Members tab.
- * Paste emails (comma-separated) and click Add Members. All added users can open this project by signing in with the same email. (Current input expects commas. If you prefer semicolons, a tiny parser can be added later).
+  * Go to the Members tab.
+  * Paste emails (comma-separated) and click Add Members. All added users can open this project by signing in with the same email. (Current input expects commas. If you prefer semicolons, a tiny parser can be added later).
 
 * Add Tasks & Subtasks
- * In Tasks tab → “Add / Edit Task”. Set Status, Start/End, Assignee (email), and Progress%.
- * Add subtasks in Subtasks (select a parent task first).
- * Edit by choosing an existing item in “Edit existing (optional)” and saving.
- * Delete controls appear beneath each table.
+  * In Tasks tab → “Add / Edit Task”. Set Status, Start/End, Assignee (email), and Progress%.
+  * Add subtasks in Subtasks (select a parent task first).
+  * Edit by choosing an existing item in “Edit existing (optional)” and saving.
+  * Delete controls appear beneath each table.
 
 * Timeline (Gantt)
- * Open Gantt tab to see Tasks + Subtasks.
- * Bars span through each finish day for a clear schedule view.
+  * Open Gantt tab to see Tasks + Subtasks.
+  * Bars span through each finish day for a clear schedule view.
 
 
 
