@@ -10,7 +10,7 @@
   <!-- App / UX -->
   <img alt="Gantt Timeline" src="https://img.shields.io/badge/Timeline-Gantt%20Chart-0EA5E9">
   <img alt="Tasks & Subtasks" src="https://img.shields.io/badge/Tasks-Tasks%20%2B%20Subtasks-10B981">
-  <img alt="Status" src="https://img.shields.io/badge/Status-Backlog%20%7C%20In--Progress%20%7C%20Completed-8B5CF6">
+  <img alt="Status" src="https://img.shields.io/badge/Status-To--Do%20%7C%20In--Progress%20%7C%20Done-8B5CF6">
   <img alt="Progress" src="https://img.shields.io/badge/Progress-0%E2%80%93100%25-6366F1">
   <img alt="Assignees" src="https://img.shields.io/badge/Assignee-email--based-22C55E">
 
