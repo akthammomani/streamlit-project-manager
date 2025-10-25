@@ -591,8 +591,6 @@ else:
                     st.success("Subtask saved.")
                     force_rerun()
 
-    # Subtasks table (visible to all)
-# Subtasks table (visible to all)
     if subs:
         sub_rows = [{
             "id": s["id"],
