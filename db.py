@@ -23,23 +23,9 @@ import hashlib
 #Base = declarative_base()
 
 # ---- Engine / Session ----
-DEFAULT_SQLITE = "sqlite:///strivio.db"
-DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_SQLITE)
+DATABASE_URL = st.secrets["DATABASE_URL"]
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
-# Ensure sslmode for Postgres URLs (Supabase)
-if DATABASE_URL.startswith("postgres") and "sslmode=" not in DATABASE_URL:
-    sep = "&" if "?" in DATABASE_URL else "?"
-    DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
-
-# Keep pool small for hosted DBs; pre_ping avoids stale connections
-engine = create_engine(
-    DATABASE_URL,
-    future=True,
-    pool_pre_ping=True,
-    pool_size=5,        # keep small on free tiers
-    max_overflow=0,     # don't burst above pool_size
-    echo=False,
-)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
 Base = declarative_base()
 
