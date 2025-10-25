@@ -23,9 +23,17 @@ import hashlib
 #Base = declarative_base()
 
 # ---- Engine / Session ----
-DATABASE_URL = st.secrets["DATABASE_URL"]
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+try:
+    import streamlit as st
+    _secrets = getattr(st, "secrets", {})
+except Exception:
+    _secrets = {}
 
+DATABASE_URL = (_secrets.get("DATABASE_URL")
+                or os.getenv("DATABASE_URL")
+                or "sqlite:///strivio.db")
+
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
 Base = declarative_base()
 
