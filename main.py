@@ -593,100 +593,100 @@ else:
 
     # Subtasks table (visible to all)
 # Subtasks table (visible to all)
-if subs:
-    sub_rows = [{
-        "id": s["id"],
-        "Subtask": s["name"],
-        "Status": _norm_status(s["status"]),
-        "Start": s["start_date"],
-        "End": s["end_date"],
-        "Assignee": s["assignee_email"],
-        "Progress%": float(round(s["progress"], 1)),
-    } for s in subs]
-    df_subs = pd.DataFrame(sub_rows, columns=["id","Subtask","Status","Start","End","Assignee","Progress%"])
-
-    st.dataframe(
-        df_subs,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "id": st.column_config.TextColumn("id", help="Internal id", width="small"),
-            "Subtask": st.column_config.TextColumn("Subtask", required=True),
-            "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS, disabled=True),
-            "Start": st.column_config.DateColumn("Start"),
-            "End": st.column_config.DateColumn("End"),
-            "Assignee": st.column_config.TextColumn("Assignee"),
-            "Progress%": st.column_config.ProgressColumn(
-                "Progress",
-                help="Completion %",
-                format="%d%%",
-                min_value=0,
-                max_value=100,
-            ),
-        },
-        column_order=["Subtask","Status","Start","End","Assignee","Progress%","id"],
-    )
-
-    cdl, ctpl, cup = st.columns([1,1,2])
-    with cdl:
-        st.download_button(
-            "⬇️ Download subtasks CSV",
-            data=df_subs.drop(columns=["id"]).to_csv(index=False).encode("utf-8"),
-            file_name=f"subtasks_task_{picked_task_id}.csv",
-            mime="text/csv",
+    if subs:
+        sub_rows = [{
+            "id": s["id"],
+            "Subtask": s["name"],
+            "Status": _norm_status(s["status"]),
+            "Start": s["start_date"],
+            "End": s["end_date"],
+            "Assignee": s["assignee_email"],
+            "Progress%": float(round(s["progress"], 1)),
+        } for s in subs]
+        df_subs = pd.DataFrame(sub_rows, columns=["id","Subtask","Status","Start","End","Assignee","Progress%"])
+    
+        st.dataframe(
+            df_subs,
             use_container_width=True,
+            hide_index=True,
+            column_config={
+                "id": st.column_config.TextColumn("id", help="Internal id", width="small"),
+                "Subtask": st.column_config.TextColumn("Subtask", required=True),
+                "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS, disabled=True),
+                "Start": st.column_config.DateColumn("Start"),
+                "End": st.column_config.DateColumn("End"),
+                "Assignee": st.column_config.TextColumn("Assignee"),
+                "Progress%": st.column_config.ProgressColumn(
+                    "Progress",
+                    help="Completion %",
+                    format="%d%%",
+                    min_value=0,
+                    max_value=100,
+                ),
+            },
+            column_order=["Subtask","Status","Start","End","Assignee","Progress%","id"],
         )
-    with ctpl:
-        template_subs = pd.DataFrame(
-            columns=["Subtask","Status","Start","End","Assignee","Progress%"]
-        )
-        st.download_button(
-            "📄 Subtask CSV template",
-            data=template_subs.to_csv(index=False).encode("utf-8"),
-            file_name="subtask_import_template.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
-    with cup:
-        up_sub = st.file_uploader(
-            "Import subtasks from CSV (for selected task)",
-            type=["csv"],
-            accept_multiple_files=False,
-            key=f"sub_csv_import_{picked_task_id}",
-            help="Columns: Subtask, Status, Start, End, Assignee, Progress%",
-        )
-        if up_sub is not None and CAN_WRITE:
-            try:
-                imp = pd.read_csv(up_sub)
-                created = 0
-                for _, r in imp.iterrows():
-                    name = str(r.get("Subtask", "")).strip()
-                    if not name:
-                        continue
-                    status = _norm_status(r.get("Status", "To-Do"))
-                    start = parse_date(r.get("Start"))
-                    end   = parse_date(r.get("End"))
-                    assg  = str(r.get("Assignee", "")).strip() or None
-                    try:
-                        prog = float(r.get("Progress%", 0) or 0)
-                    except Exception:
-                        prog = 0.0
-
-                    db.add_or_update_subtask(
-                        task_id=picked_task_id,
-                        name=name,
-                        status=status if status in STATUS_OPTIONS else "To-Do",
-                        start=start,
-                        end=end,
-                        assignee_email=assg,
-                        subtask_id=None,
-                        progress=float(max(0, min(100, prog))),
-                    )
-                    created += 1
-                st.success(f"Imported {created} subtask(s).")
-                force_rerun()
-            except Exception as e:
-                st.error(f"Import failed: {e}")
+    
+        cdl, ctpl, cup = st.columns([1,1,2])
+        with cdl:
+            st.download_button(
+                "⬇️ Download subtasks CSV",
+                data=df_subs.drop(columns=["id"]).to_csv(index=False).encode("utf-8"),
+                file_name=f"subtasks_task_{picked_task_id}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with ctpl:
+            template_subs = pd.DataFrame(
+                columns=["Subtask","Status","Start","End","Assignee","Progress%"]
+            )
+            st.download_button(
+                "📄 Subtask CSV template",
+                data=template_subs.to_csv(index=False).encode("utf-8"),
+                file_name="subtask_import_template.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with cup:
+            up_sub = st.file_uploader(
+                "Import subtasks from CSV (for selected task)",
+                type=["csv"],
+                accept_multiple_files=False,
+                key=f"sub_csv_import_{picked_task_id}",
+                help="Columns: Subtask, Status, Start, End, Assignee, Progress%",
+            )
+            if up_sub is not None and CAN_WRITE:
+                try:
+                    imp = pd.read_csv(up_sub)
+                    created = 0
+                    for _, r in imp.iterrows():
+                        name = str(r.get("Subtask", "")).strip()
+                        if not name:
+                            continue
+                        status = _norm_status(r.get("Status", "To-Do"))
+                        start = parse_date(r.get("Start"))
+                        end   = parse_date(r.get("End"))
+                        assg  = str(r.get("Assignee", "")).strip() or None
+                        try:
+                            prog = float(r.get("Progress%", 0) or 0)
+                        except Exception:
+                            prog = 0.0
+    
+                        db.add_or_update_subtask(
+                            task_id=picked_task_id,
+                            name=name,
+                            status=status if status in STATUS_OPTIONS else "To-Do",
+                            start=start,
+                            end=end,
+                            assignee_email=assg,
+                            subtask_id=None,
+                            progress=float(max(0, min(100, prog))),
+                        )
+                        created += 1
+                    st.success(f"Imported {created} subtask(s).")
+                    force_rerun()
+                except Exception as e:
+                    st.error(f"Import failed: {e}")
 
 
 
