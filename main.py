@@ -412,110 +412,81 @@ with tab1:
         }
         return mapping.get(s, s.title())
     
+    # ---------- Tasks table (inline edit + delete) ----------
     if tasks:
-        st.markdown("**Your Tasks**")
-    
-        task_rows = [{
+        # Build editable frame
+        status_order_map = {"To-Do": 0, "In Progress": 1, "Done": 2}
+        df_tasks = pd.DataFrame([{
             "id": t["id"],
             "Task": t["name"],
-            "Status": _norm_status(t["status"]),
+            "Status": t["status"],
             "Start": t["start_date"],
             "End": t["end_date"],
             "Assignee": t["assignee_email"],
-            "Progress%": float(round(t["progress"], 1)),
-            "Description": ""  # optional placeholder for CSV template
-        } for t in tasks]
+            "Progress%": round(float(t["progress"] or 0), 1),
+            "Description": getattr(t, "description", None) if isinstance(t, dict) else None,  # tolerate missing
+            "Delete": False,
+        } for t in tasks])
     
-        df_tasks = pd.DataFrame(task_rows, columns=["id","Task","Status","Start","End","Assignee","Progress%","Description"])
+        # Sort: by status group then start date (earliest first)
+        df_tasks["_ord"] = df_tasks["Status"].map(status_order_map).fillna(99)
+        df_tasks = df_tasks.sort_values(["_ord", "Start"], kind="mergesort").drop(columns=["_ord"])
     
-        st.dataframe(
+        # Keep id as hidden index for updates/deletes
+        df_tasks = df_tasks.set_index("id", drop=True)
+    
+        st.markdown("**Your Tasks**")
+        edited_tasks = st.data_editor(
             df_tasks,
+            hide_index=True,  # id hidden but we still have it in the index
             use_container_width=True,
-            hide_index=True,
+            disabled=not CAN_WRITE,
             column_config={
-                "id": st.column_config.TextColumn("id", help="Internal id", width="small"),
-                "Task": st.column_config.TextColumn("Task", required=True),
-                "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS, disabled=True),
-                "Start": st.column_config.DateColumn("Start"),
-                "End": st.column_config.DateColumn("End"),
-                "Assignee": st.column_config.TextColumn("Assignee"),
-                "Progress%": st.column_config.ProgressColumn(
-                    "Progress",
-                    help="Completion %",
-                    format="%d%%",
-                    min_value=0,
-                    max_value=100,
-                ),
-                "Description": st.column_config.TextColumn("Description", help="Optional", width="medium"),
+                "Task": st.column_config.TextColumn(required=True),
+                "Status": st.column_config.SelectboxColumn(options=STATUS_OPTIONS, required=True),
+                "Start": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                "End": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                "Assignee": st.column_config.TextColumn(help="Email (optional)"),
+                "Progress%": st.column_config.NumberColumn(min_value=0, max_value=100, step=1, format="%d %%"),
+                "Description": st.column_config.TextColumn(),
+                "Delete": st.column_config.CheckboxColumn(help="Mark row(s) to delete"),
             },
-            column_order=["Task","Status","Start","End","Assignee","Progress%","Description","id"],
+            key="tasks_editor",
         )
     
-        col_dl, col_tpl, col_up = st.columns([1,1,2])
-        with col_dl:
-            st.download_button(
-                "⬇️ Download tasks CSV",
-                data=df_tasks.drop(columns=["id"]).to_csv(index=False).encode("utf-8"),
-                file_name=f"tasks_project_{current_project.id}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-        with col_tpl:
-            # clean, empty template users can fill
-            template_tasks = pd.DataFrame(
-                columns=["Task","Status","Start","End","Assignee","Progress%","Description"]
-            )
-            st.download_button(
-                "📄 Task CSV template",
-                data=template_tasks.to_csv(index=False).encode("utf-8"),
-                file_name="task_import_template.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-        with col_up:
-            up = st.file_uploader(
-                "Import tasks from CSV",
-                type=["csv"],
-                accept_multiple_files=False,
-                key="task_csv_import",
-                help="Columns: Task, Status, Start, End, Assignee, Progress%, Description",
-            )
-            if up is not None and CAN_WRITE:
-                try:
-                    imp = pd.read_csv(up)
-                    created = 0
-                    for _, r in imp.iterrows():
-                        name = str(r.get("Task", "")).strip()
-                        if not name:
-                            continue
-                        status = _norm_status(r.get("Status", "To-Do"))
-                        start = parse_date(r.get("Start"))
-                        end   = parse_date(r.get("End"))
-                        assg  = str(r.get("Assignee", "")).strip() or None
-                        try:
-                            prog = float(r.get("Progress%", 0) or 0)
-                        except Exception:
-                            prog = 0.0
-                        desc  = str(r.get("Description", "")).strip() or None
+        if CAN_WRITE and st.button("💾 Save task changes", type="primary"):
+            try:
+                # Original for change detection
+                original = df_tasks
     
+                # Deletes
+                to_delete = edited_tasks[edited_tasks["Delete"]].index.tolist()
+                for tid in to_delete:
+                    db.delete_task(int(tid))
+    
+                # Updates (only rows not deleted)
+                keep = edited_tasks[~edited_tasks["Delete"]]
+                for tid, row in keep.iterrows():
+                    # If changed vs original, push update
+                    if not tid in original.index or not row.equals(original.loc[tid]):
                         db.add_or_update_task(
                             project_id=current_project.id,
-                            name=name,
-                            status=status if status in STATUS_OPTIONS else "To-Do",
-                            start=start,
-                            end=end,
-                            assignee_email=assg,
-                            description=desc,
-                            task_id=None,
-                            progress=float(max(0, min(100, prog))),
+                            name=row["Task"],
+                            status=row["Status"],
+                            start=parse_date(row["Start"]),
+                            end=parse_date(row["End"]),
+                            assignee_email=(row["Assignee"] or None),
+                            description=(row.get("Description") or None),
+                            task_id=int(tid),
+                            progress=float(row["Progress%"] or 0),
                         )
-                        created += 1
-                    st.success(f"Imported {created} task(s).")
-                    force_rerun()
-                except Exception as e:
-                    st.error(f"Import failed: {e}")
+                st.success("Tasks updated.")
+                force_rerun()
+            except Exception as e:
+                st.error(f"Failed to save tasks: {e}")
     else:
         st.info("No tasks yet. Add your first task above." if CAN_WRITE else "No tasks yet.")
+
 
 
     # Delete Task (writers only)
@@ -590,100 +561,70 @@ with tab1:
                     force_rerun()
 
     # Subtasks table (visible to all)
+    # ---------- Subtasks table (inline edit + delete) ----------
     if subs:
-        sub_rows = [{
+        status_order_map = {"To-Do": 0, "In Progress": 1, "Done": 2}
+        df_subs = pd.DataFrame([{
             "id": s["id"],
             "Subtask": s["name"],
-            "Status": _norm_status(s["status"]),
+            "Status": s["status"],
             "Start": s["start_date"],
             "End": s["end_date"],
             "Assignee": s["assignee_email"],
-            "Progress%": float(round(s["progress"], 1)),
-        } for s in subs]
-        df_subs = pd.DataFrame(sub_rows, columns=["id","Subtask","Status","Start","End","Assignee","Progress%"])
+            "Progress%": round(float(s["progress"] or 0), 1),
+            "Delete": False,
+        } for s in subs])
     
-        st.dataframe(
+        df_subs["_ord"] = df_subs["Status"].map(status_order_map).fillna(99)
+        df_subs = df_subs.sort_values(["_ord", "Start"], kind="mergesort").drop(columns=["_ord"])
+        df_subs = df_subs.set_index("id", drop=True)
+    
+        st.markdown("**Subtasks**")
+        edited_subs = st.data_editor(
             df_subs,
-            use_container_width=True,
             hide_index=True,
+            use_container_width=True,
+            disabled=not CAN_WRITE,
             column_config={
-                "id": st.column_config.TextColumn("id", help="Internal id", width="small"),
-                "Subtask": st.column_config.TextColumn("Subtask", required=True),
-                "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS, disabled=True),
-                "Start": st.column_config.DateColumn("Start"),
-                "End": st.column_config.DateColumn("End"),
-                "Assignee": st.column_config.TextColumn("Assignee"),
-                "Progress%": st.column_config.ProgressColumn(
-                    "Progress",
-                    help="Completion %",
-                    format="%d%%",
-                    min_value=0,
-                    max_value=100,
-                ),
+                "Subtask": st.column_config.TextColumn(required=True),
+                "Status": st.column_config.SelectboxColumn(options=STATUS_OPTIONS, required=True),
+                "Start": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                "End": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                "Assignee": st.column_config.TextColumn(help="Email (optional)"),
+                "Progress%": st.column_config.NumberColumn(min_value=0, max_value=100, step=1, format="%d %%"),
+                "Delete": st.column_config.CheckboxColumn(help="Mark row(s) to delete"),
             },
-            column_order=["Subtask","Status","Start","End","Assignee","Progress%","id"],
+            key=f"subs_editor_{picked_task_id}",
         )
     
-        cdl, ctpl, cup = st.columns([1,1,2])
-        with cdl:
-            st.download_button(
-                "⬇️ Download subtasks CSV",
-                data=df_subs.drop(columns=["id"]).to_csv(index=False).encode("utf-8"),
-                file_name=f"subtasks_task_{picked_task_id}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-        with ctpl:
-            template_subs = pd.DataFrame(
-                columns=["Subtask","Status","Start","End","Assignee","Progress%"]
-            )
-            st.download_button(
-                "📄 Subtask CSV template",
-                data=template_subs.to_csv(index=False).encode("utf-8"),
-                file_name="subtask_import_template.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-        with cup:
-            up_sub = st.file_uploader(
-                "Import subtasks from CSV (for selected task)",
-                type=["csv"],
-                accept_multiple_files=False,
-                key=f"sub_csv_import_{picked_task_id}",
-                help="Columns: Subtask, Status, Start, End, Assignee, Progress%",
-            )
-            if up_sub is not None and CAN_WRITE:
-                try:
-                    imp = pd.read_csv(up_sub)
-                    created = 0
-                    for _, r in imp.iterrows():
-                        name = str(r.get("Subtask", "")).strip()
-                        if not name:
-                            continue
-                        status = _norm_status(r.get("Status", "To-Do"))
-                        start = parse_date(r.get("Start"))
-                        end   = parse_date(r.get("End"))
-                        assg  = str(r.get("Assignee", "")).strip() or None
-                        try:
-                            prog = float(r.get("Progress%", 0) or 0)
-                        except Exception:
-                            prog = 0.0
+        if CAN_WRITE and st.button("💾 Save subtask changes", type="primary", key=f"save_subs_{picked_task_id}"):
+            try:
+                original = df_subs
     
+                # Deletes
+                to_delete = edited_subs[edited_subs["Delete"]].index.tolist()
+                for sid in to_delete:
+                    db.delete_subtask(int(sid))
+    
+                # Updates
+                keep = edited_subs[~edited_subs["Delete"]]
+                for sid, row in keep.iterrows():
+                    if not sid in original.index or not row.equals(original.loc[sid]):
                         db.add_or_update_subtask(
                             task_id=picked_task_id,
-                            name=name,
-                            status=status if status in STATUS_OPTIONS else "To-Do",
-                            start=start,
-                            end=end,
-                            assignee_email=assg,
-                            subtask_id=None,
-                            progress=float(max(0, min(100, prog))),
+                            name=row["Subtask"],
+                            status=row["Status"],
+                            start=parse_date(row["Start"]),
+                            end=parse_date(row["End"]),
+                            assignee_email=(row["Assignee"] or None),
+                            subtask_id=int(sid),
+                            progress=float(row["Progress%"] or 0),
                         )
-                        created += 1
-                    st.success(f"Imported {created} subtask(s).")
-                    force_rerun()
-                except Exception as e:
-                    st.error(f"Import failed: {e}")
+                st.success("Subtasks updated.")
+                force_rerun()
+            except Exception as e:
+                st.error(f"Failed to save subtasks: {e}")
+
 
 
         # Delete Subtask (writers only)
