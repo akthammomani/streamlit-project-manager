@@ -222,29 +222,7 @@ with st.sidebar:
     st.caption(f"Signed in as **{user['email']}**")
     st.markdown("---")
     # Always-visible Contacts (pill buttons)
-    st.markdown("""
-    <style>
-      .contact-card {padding:10px 12px;border:1px solid #e5e7eb;border-radius:14px;background:#f9fafb;}
-      .contact-title {font-weight:700;margin-bottom:8px;color:#111827;}
-      .contact-grid {display:flex;flex-wrap:wrap;gap:8px;}
-      .contact-btn {
-        display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid #e5e7eb;
-        background:#ffffff;color:#111827;text-decoration:none;font-weight:600;font-size:13px;
-        box-shadow:0 1px 0 rgba(17,24,39,.04);transition:.15s ease;
-      }
-      .contact-btn:hover {transform:translateY(-1px);box-shadow:0 6px 16px rgba(31,41,55,.06);}
-    </style>
-    <div class="contact-card">
-      <div class="contact-title">Contacts</div>
-      <div class="contact-grid">
-        <a class="contact-btn" href="https://github.com/akthammomani" target="_blank">GitHub</a>
-        <a class="contact-btn" href="https://www.linkedin.com/in/akthammomani/" target="_blank">LinkedIn</a>
-        <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM</a>
-        <a class="contact-btn" href="mailto:aktham.momani81@gmail.com">Email</a>
-      </div>
-      <div style="margin-top:8px;"><span style="color:#6b7280;font-size:12px;">© Aktham Momani, 2025.</span></div>
-    </div>
-    """, unsafe_allow_html=True)
+    
 
 _projects_raw = db.get_projects_for_user(user["email"])
 current_project = next((p for p in _projects_raw if p.id == st.session_state.get("selected_project_id")), None)
@@ -288,6 +266,30 @@ with st.sidebar:
                 st.session_state["selected_project_id"] = pid
                 st.success("Project created.")
                 force_rerun()
+
+        st.markdown("""
+    <style>
+      .contact-card {padding:10px 12px;border:1px solid #e5e7eb;border-radius:14px;background:#f9fafb;}
+      .contact-title {font-weight:700;margin-bottom:8px;color:#111827;}
+      .contact-grid {display:flex;flex-wrap:wrap;gap:8px;}
+      .contact-btn {
+        display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid #e5e7eb;
+        background:#ffffff;color:#111827;text-decoration:none;font-weight:600;font-size:13px;
+        box-shadow:0 1px 0 rgba(17,24,39,.04);transition:.15s ease;
+      }
+      .contact-btn:hover {transform:translateY(-1px);box-shadow:0 6px 16px rgba(31,41,55,.06);}
+    </style>
+    <div class="contact-card">
+      <div class="contact-title">Contacts</div>
+      <div class="contact-grid">
+        <a class="contact-btn" href="https://github.com/akthammomani" target="_blank">GitHub</a>
+        <a class="contact-btn" href="https://www.linkedin.com/in/akthammomani/" target="_blank">LinkedIn</a>
+        <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM</a>
+        <a class="contact-btn" href="mailto:aktham.momani81@gmail.com">Email</a>
+      </div>
+      <div style="margin-top:8px;"><span style="color:#6b7280;font-size:12px;">© Aktham Momani, 2025.</span></div>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.title(current_project.name)
 st.caption(f"{current_project.start_date} → {current_project.end_date}")
