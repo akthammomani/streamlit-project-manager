@@ -720,24 +720,35 @@ with tab2:
     st.markdown("---")
 
     # ---- At-Risk / Hygiene
-    st.caption("At-Risk / Hygiene")
+    st.markdown("### At-Risk / Hygiene")
+    
+    # build frames (safe when dfA is empty)
     missing_dates = dfA.loc[~dfA["has_dates"], ["name","_type","assignee_email","status","progress"]] if not dfA.empty else pd.DataFrame(columns=["name","_type","assignee_email","status","progress"])
-    if not missing_dates.empty:
-        st.warning("Items missing start or end dates:")
-        st.data_editor(
-            missing_dates.rename(columns={"name":"Item","_type":"Type","assignee_email":"Assignee","status":"Status","progress":"Progress%"}).reset_index(drop=True),
-            width="stretch", hide_index=True, disabled=True,
-            column_config={"Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%")}
-        )
+    overdue_df    = dfA.loc[dfA["is_overdue"], ["name","_type","assignee_email","status","end_date","progress"]].sort_values("end_date") if not dfA.empty else pd.DataFrame(columns=["name","_type","assignee_email","status","end_date","progress"])
+    
+    if missing_dates.empty and overdue_df.empty:
+        st.success("Nothing is out of order right now.")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Overdue Items", 0)
+        with c2:
+            st.metric("Items Missing Dates", 0)
+    else:
+        if not missing_dates.empty:
+            st.warning("Items missing start or end dates:")
+            st.data_editor(
+                missing_dates.rename(columns={"name":"Item","_type":"Type","assignee_email":"Assignee","status":"Status","progress":"Progress%"}).reset_index(drop=True),
+                width="stretch", hide_index=True, disabled=True,
+                column_config={"Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%")}
+            )
+        if not overdue_df.empty:
+            st.error("Overdue items:")
+            st.data_editor(
+                overdue_df.rename(columns={"name":"Item","_type":"Type","assignee_email":"Assignee","status":"Status","end_date":"Due","progress":"Progress%"}).reset_index(drop=True),
+                width="stretch", hide_index=True, disabled=True,
+                column_config={"Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%")}
+            )
 
-    overdue_df = dfA.loc[dfA["is_overdue"], ["name","_type","assignee_email","status","end_date","progress"]].sort_values("end_date") if not dfA.empty else pd.DataFrame(columns=["name","_type","assignee_email","status","end_date","progress"])
-    if not overdue_df.empty:
-        st.error("Overdue items:")
-        st.data_editor(
-            overdue_df.rename(columns={"name":"Item","_type":"Type","assignee_email":"Assignee","status":"Status","end_date":"Due","progress":"Progress%"}).reset_index(drop=True),
-            width="stretch", hide_index=True, disabled=True,
-            column_config={"Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%")}
-        )
 
 # ---------- Members Tab ----------
 with tab3:
