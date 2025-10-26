@@ -77,42 +77,42 @@
 
 ## Usage
 
-### 1) Create / Open a project
-- In the sidebar, **New project** → set Name, Start, End, optional member emails, and public/PIN.
-- Use **Open project** to switch projects.
-- **Manage current project**: rename, **change start/end dates**, or delete.
+- **Create / Open a project**
+  - In the sidebar, **New project** → set Name, Start, End, optional member emails, and public/PIN.
+  - Use **Open project** to switch projects.
+  - **Manage current project**: rename, **change start/end dates**, or delete.
 
-### 2) Tasks & Subtasks (inline)
-- Go to **Tasks** tab.
-- Edit directly in the grid (Status, Start/End, Assignee, **Progress %**).  
-- Add/remove rows; click **Save changes** to persist.  
-- **Subtasks**: pick a parent task, then edit its grid the same way.
-- CSV import supported (see on-screen column order).
+- **Tasks & Subtasks (inline)**
+  - Go to **Tasks** tab.
+  - Edit directly in the grid (Status, Start/End, Assignee, **Progress %**).  
+  - Add/remove rows; click **Save changes** to persist.  
+  - **Subtasks**: pick a parent task, then edit its grid the same way.
+  - CSV import supported (see on-screen column order).
 
-### 3) Project Analytics
-- Shows **Timeline**, **Distribution by Status**, **Workload by Assignee**, and a quick **health panel**.  
-- If no risks are detected, the panel explicitly states nothing is out of order.
+- **Project Analytics**
+  - Shows **Timeline**, **Distribution by Status**, **Workload by Assignee**, and a quick **health panel**.  
+  - If no risks are detected, the panel explicitly states nothing is out of order.
 
 ---
 
 ## Data & Deployment
 
 ### Quick demo (recommended to try)
-- Run locally: `pip install -r requirements.txt` → `streamlit run main.py`.  
+- Run locally: `pip install -r requirements.txt` -> `streamlit run main.py`.  
 - Uses **SQLite** by default; no external setup.
 
-### BYOS (Bring Your Own Supabase/Postgres) — for scale & data ownership
+### BYOS (Bring Your Own Supabase/Postgres) - for scale & data ownership
 > Keep it simple: same code, just point to your DB.
 
-1. Create a Postgres/Supabase project.  
-2. Apply your schema/migrations (SQL file in `db/` or your existing tables).  
-3. Set environment variable: `DATABASE_URL=postgresql://...` (or use Supabase connection string).  
-4. (Optional but strongly recommended) enable RLS + minimal policies and/or quota triggers (e.g., project/task caps).  
-5. Deploy to Streamlit Cloud/Render/Vercel with that env var.
+- Create a Postgres/Supabase project.  
+- Apply your schema/migrations (SQL file in `db/` or your existing tables).  
+- Set environment variable: `DATABASE_URL=postgresql://...` (or use Supabase connection string).  
+- (Optional but strongly recommended) enable RLS + minimal policies and/or quota triggers (e.g., project/task caps).  
+- Deploy to Streamlit Cloud/Render/Vercel with that env var.
 
 **Why this split?**  
 - **Demo** keeps onboarding friction low.  
-- **BYOS** gives teams full control, avoids your quota limits, and keeps their data private.
+- **BYOS** gives teams full control, avoids quota limits, and keeps data private.
 
 ---
 
