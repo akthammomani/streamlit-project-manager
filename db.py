@@ -207,6 +207,23 @@ def rename_project(project_id: int, new_name: str) -> None:
             p.name = new_name.strip()
             s.commit()
 
+def update_project_dates(project_id: int, start_date: date, end_date: date) -> bool:
+    """
+    Update a project's start/end dates. Returns True if updated, False if project not found.
+    """
+    try:
+        with SessionLocal() as s:
+            p = s.get(Project, project_id)
+            if not p:
+                return False
+            p.start_date = start_date
+            p.end_date = end_date
+            s.commit()
+            return True
+    except Exception:
+        return False
+
+
 def set_member_role(project_id: int, email: str, role: str = "viewer"):
     with SessionLocal() as s:
         u = _get_or_create_user(s, email)
