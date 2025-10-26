@@ -23,18 +23,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Global CSS: hide index/ID column in all tables/editors (header + body)
+# (Cosmetic only)
 st.markdown("""
 <style>
-div[data-testid="stDataFrame"] thead tr th:first-child,
-div[data-testid="stDataFrame"] tbody tr td:first-child,
-div[data-testid="stDataEditor"] thead tr th:first-child,
-div[data-testid="stDataEditor"] tbody tr td:first-child { display:none !important; }
-div[data-testid="stDataFrame"] thead tr th:nth-child(2),
-div[data-testid="stDataFrame"] tbody tr td:nth-child(2),
-div[data-testid="stDataEditor"] thead tr th:nth-child(2),
-div[data-testid="stDataEditor"] tbody tr td:nth-child(2) { border-left:none !important; }
-[data-testid="stImage"] img { display:block;margin-left:auto;margin-right:auto; }
+  [data-testid="stImage"] img { display:block;margin-left:auto;margin-right:auto; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -120,7 +112,7 @@ def full_screen_login():
         with st.form("login_form", clear_on_submit=False):
             email = st.text_input("Your email", placeholder="you@example.com")
             name  = st.text_input("Your name (optional)")
-            submitted = st.form_submit_button("Sign in / Continue", width='stretch')
+            submitted = st.form_submit_button("Sign in / Continue", use_container_width=True)
         if submitted:
             if not email:
                 st.warning("Please enter your email.")
@@ -142,9 +134,8 @@ def full_screen_project_gate(user_email: str):
         st.markdown("<h2 style='text-align:center;margin-top:8px;'>Choose or Create a Project</h2>", unsafe_allow_html=True)
 
         if projects:
-            # names only
             opt_proj = st.selectbox("Open existing project", options=projects, format_func=lambda p: p.name)
-            if st.button("Open project", width='stretch'):
+            if st.button("Open project", use_container_width=True):
                 st.session_state["selected_project_id"] = opt_proj.id
                 force_rerun()
 
@@ -162,7 +153,7 @@ def full_screen_project_gate(user_email: str):
             with c4:
                 pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="center_pin")
             members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="center_members")
-            submit_new = st.form_submit_button("Create project", width='stretch')
+            submit_new = st.form_submit_button("Create project", use_container_width=True)
 
         if submit_new:
             if not p_name:
@@ -175,7 +166,7 @@ def full_screen_project_gate(user_email: str):
                 members = [m.strip() for m in members_csv.split(",") if m.strip()]
                 pid = db.create_project(user_email, p_name, p_start, p_end, members, is_public=is_public, pin=(pin_val or None))
                 st.session_state["selected_project_id"] = pid
-                st.success(f"Project created.")
+                st.success("Project created.")
                 force_rerun()
 
 user = st.session_state.get("user")
@@ -194,7 +185,7 @@ with st.sidebar:
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 3, 1])
     with c2:
-        st.image(load_logo(), width='stretch')
+        st.image(load_logo(), use_container_width=True)
     st.caption(f"Signed in as **{user['email']}**")
     st.markdown("---")
 
@@ -206,7 +197,6 @@ if not current_project:
 
 with st.sidebar:
     st.subheader("Projects")
-    # names only
     ids = [p.id for p in _projects_raw]
     idx = max(0, ids.index(current_project.id)) if current_project else 0
     chosen_proj = st.selectbox("Open project", options=_projects_raw, index=idx, format_func=lambda p: p.name)
@@ -228,7 +218,7 @@ with st.sidebar:
             pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="sb_pin",
                                     help="Members will need this PIN to open the project.")
         members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="sb_members")
-        if st.button("Create project", width='stretch', key="sb_create"):
+        if st.button("Create project", use_container_width=True, key="sb_create"):
             if not p_name:
                 st.warning("Please enter a project name.")
             elif p_end < p_start:
@@ -284,21 +274,12 @@ with st.sidebar.expander("Manage current project"):
 # ---------- Tabs ----------
 tab1, tab2, tab3 = st.tabs(["Tasks", "Gantt", "Members"])
 
-# ---------- helpers for editors ----------
-def _extract_id_set(idx):
-    ids = set()
-    for i in idx:
-        try:
-            ids.add(int(i))
-        except Exception:
-            pass
-    return ids
+# ---------- mapping helpers (no index-based IDs) ----------
+def _build_row_id_map(df_sorted: pd.DataFrame, ids_sorted: list[int]) -> dict[int, int]:
+    return {int(i): int(ids_sorted[i]) for i in range(len(ids_sorted)) if ids_sorted[i] is not None}
 
-def _has_id_index(df, orig_ids):
-    try:
-        return len(_extract_id_set(df.index) & orig_ids) > 0
-    except Exception:
-        return False
+def _resolve_row_to_id(row_index: int, row_id_map: dict[int, int]) -> int | None:
+    return row_id_map.get(int(row_index))
 
 # =======================
 # Tasks Tab (inline edit)
@@ -309,31 +290,34 @@ with tab1:
         st.info("You have read-only access to this project.")
 
     raw_tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
-    task_cols = ["Task", "Status", "Start", "End", "Assignee", "Progress%", "Progress (bar)", "Description"]
 
-    task_records = []
+    task_cols = ["Task", "Status", "Start", "End", "Assignee", "Progress%", "Description"]
+    rows, ids_for_rows = [], []
     for t in raw_tasks:
         pct = float(round(t["progress"] or 0, 1))
-        task_records.append({
+        rows.append({
             "Task": t["name"] or "",
             "Status": _norm_status(t["status"]) if t["status"] else "To-Do",
             "Start": t["start_date"],
             "End": t["end_date"],
             "Assignee": t["assignee_email"] or "",
-            "Progress%": pct,              # editable number
-            "Progress (bar)": pct,         # read-only bar mirror
+            "Progress%": pct,        # editable number only
             "Description": "",
         })
+        ids_for_rows.append(t["id"])
 
-    if task_records:
-        df_tasks = pd.DataFrame(task_records, columns=task_cols, index=[t["id"] for t in raw_tasks])
-        df_tasks.index.name = ""   # hide the index header so 'id' never appears
-    else:
-        df_tasks = pd.DataFrame(columns=task_cols)
+    df_tasks = pd.DataFrame(rows, columns=task_cols)
+    # Sort + map rows -> ids
+    order = df_tasks.sort_values(by="Start", ascending=True, na_position="last").index.tolist()
+    df_tasks_sorted = df_tasks.iloc[order].reset_index(drop=True)
+    ids_sorted = [ids_for_rows[i] for i in order]
+    task_row_id_map = _build_row_id_map(df_tasks_sorted, ids_sorted)
+    st.session_state["task_row_id_map"] = task_row_id_map
+    st.session_state["task_orig_ids"] = set([i for i in ids_sorted if i is not None])
 
     edited_tasks = st.data_editor(
-        df_tasks.sort_values(by="Start", ascending=True, na_position="last"),
-        width='stretch',
+        df_tasks_sorted,
+        width="stretch",
         hide_index=True,
         num_rows="dynamic",
         disabled=not CAN_WRITE,
@@ -345,31 +329,27 @@ with tab1:
             "End": st.column_config.DateColumn("End"),
             "Assignee": st.column_config.TextColumn("Assignee"),
             "Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%"),
-            "Progress (bar)": st.column_config.ProgressColumn("Progress", min_value=0, max_value=100, format="%d%%"),
             "Description": st.column_config.TextColumn("Description", help="Optional notes"),
         },
     )
 
     if CAN_WRITE and st.button("💾 Save task changes"):
         try:
-            orig_ids = {t["id"] for t in raw_tasks if t["id"] is not None}
             edited_df = edited_tasks.copy()
+            row_map = st.session_state.get("task_row_id_map", {})
+            orig_ids = st.session_state.get("task_orig_ids", set())
 
-            if _has_id_index(edited_df, orig_ids):
-                edited_ids = _extract_id_set(edited_df.index)
-                to_delete = orig_ids - edited_ids
-            else:
-                to_delete = set()
+            # Detect deletions
+            edited_row_indices = set(int(i) for i in edited_df.index)
+            all_row_indices = set(row_map.keys())
+            removed_rows = all_row_indices - edited_row_indices
+            for r in removed_rows:
+                del_id = row_map.get(r)
+                if del_id in orig_ids:
+                    db.delete_task(int(del_id))
 
-            for del_id in to_delete:
-                db.delete_task(int(del_id))
-
-            if _has_id_index(edited_df, orig_ids):
-                iterable = edited_df.iterrows()
-            else:
-                iterable = [(None, row) for _, row in edited_df.iterrows()]
-
-            for maybe_id, row in iterable:
+            # Upserts
+            for row_idx, row in edited_df.iterrows():
                 name = str(row.get("Task", "")).strip()
                 if not name:
                     continue
@@ -384,6 +364,7 @@ with tab1:
                 prog = float(max(0, min(100, prog)))
                 desc  = str(row.get("Description", "")).strip() or None
 
+                maybe_id = _resolve_row_to_id(row_idx, row_map)
                 db.add_or_update_task(
                     project_id=current_project.id,
                     name=name,
@@ -392,7 +373,7 @@ with tab1:
                     end=end,
                     assignee_email=assg,
                     description=desc,
-                    task_id=int(maybe_id) if (maybe_id is not None and int(maybe_id) in orig_ids) else None,
+                    task_id=int(maybe_id) if (maybe_id in orig_ids) else None,
                     progress=prog,
                 )
 
@@ -450,7 +431,6 @@ with tab1:
     if not all_tasks_for_picker:
         st.caption("Create a task first to add subtasks.")
     else:
-        # names only in the dropdown
         task_for_sub = st.selectbox(
             "Task",
             options=all_tasks_for_picker,
@@ -462,29 +442,32 @@ with tab1:
         if picked_task_id:
             raw_subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(picked_task_id)]
 
-            sub_cols = ["Subtask","Status","Start","End","Assignee","Progress%","Progress (bar)"]
-            sub_records = []
+            sub_cols = ["Subtask","Status","Start","End","Assignee","Progress%"]
+            rows_s, ids_for_rows_s = [], []
             for s_ in raw_subs:
                 pct = float(round(s_["progress"] or 0, 1))
-                sub_records.append({
+                rows_s.append({
                     "Subtask": s_["name"] or "",
                     "Status": _norm_status(s_["status"]) if s_["status"] else "To-Do",
                     "Start": s_["start_date"],
                     "End": s_["end_date"],
                     "Assignee": s_["assignee_email"] or "",
                     "Progress%": pct,
-                    "Progress (bar)": pct,
                 })
+                ids_for_rows_s.append(s_["id"])
 
-            if sub_records:
-                df_subs = pd.DataFrame(sub_records, columns=sub_cols, index=[s["id"] for s in raw_subs])
-                df_subs.index.name = ""           # hide index header
-            else:
-                df_subs = pd.DataFrame(columns=sub_cols)
+            df_subs = pd.DataFrame(rows_s, columns=sub_cols)
+            order_s = df_subs.sort_values(by="Start", ascending=True, na_position="last").index.tolist()
+            df_subs_sorted = df_subs.iloc[order_s].reset_index(drop=True)
+            ids_sorted_s = [ids_for_rows_s[i] for i in order_s]
+            sub_row_id_map = _build_row_id_map(df_subs_sorted, ids_sorted_s)
+
+            st.session_state[f"sub_row_id_map_{picked_task_id}"] = sub_row_id_map
+            st.session_state[f"sub_orig_ids_{picked_task_id}"] = set([i for i in ids_sorted_s if i is not None])
 
             edited_subs = st.data_editor(
-                df_subs.sort_values(by="Start", ascending=True, na_position="last"),
-                width='stretch',
+                df_subs_sorted,
+                width="stretch",
                 hide_index=True,
                 num_rows="dynamic",
                 disabled=not CAN_WRITE,
@@ -496,30 +479,24 @@ with tab1:
                     "End": st.column_config.DateColumn("End"),
                     "Assignee": st.column_config.TextColumn("Assignee"),
                     "Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%"),
-                    "Progress (bar)": st.column_config.ProgressColumn("Progress", min_value=0, max_value=100, format="%d%%"),
                 },
             )
 
             if CAN_WRITE and st.button("💾 Save subtask changes"):
                 try:
-                    orig_ids = {s["id"] for s in raw_subs if s["id"] is not None}
                     edited_df = edited_subs.copy()
+                    row_map = st.session_state.get(f"sub_row_id_map_{picked_task_id}", {})
+                    orig_ids = st.session_state.get(f"sub_orig_ids_{picked_task_id}", set())
 
-                    if _has_id_index(edited_df, orig_ids):
-                        edited_ids = _extract_id_set(edited_df.index)
-                        to_delete = orig_ids - edited_ids
-                    else:
-                        to_delete = set()
+                    edited_row_indices = set(int(i) for i in edited_df.index)
+                    all_row_indices = set(row_map.keys())
+                    removed_rows = all_row_indices - edited_row_indices
+                    for r in removed_rows:
+                        del_id = row_map.get(r)
+                        if del_id in orig_ids:
+                            db.delete_subtask(int(del_id))
 
-                    for del_id in to_delete:
-                        db.delete_subtask(int(del_id))
-
-                    if _has_id_index(edited_df, orig_ids):
-                        iterable = edited_df.iterrows()
-                    else:
-                        iterable = [(None, row) for _, row in edited_df.iterrows()]
-
-                    for maybe_id, row in iterable:
+                    for row_idx, row in edited_df.iterrows():
                         name = str(row.get("Subtask", "")).strip()
                         if not name:
                             continue
@@ -533,6 +510,7 @@ with tab1:
                             prog = 0.0
                         prog = float(max(0, min(100, prog)))
 
+                        maybe_id = _resolve_row_to_id(row_idx, row_map)
                         db.add_or_update_subtask(
                             task_id=picked_task_id,
                             name=name,
@@ -540,7 +518,7 @@ with tab1:
                             start=start,
                             end=end,
                             assignee_email=assg,
-                            subtask_id=int(maybe_id) if (maybe_id is not None and int(maybe_id) in orig_ids) else None,
+                            subtask_id=int(maybe_id) if (maybe_id in orig_ids) else None,
                             progress=prog,
                         )
 
@@ -627,7 +605,8 @@ with tab2:
             color_discrete_map=status_colors,
         )
         fig.update_layout(margin=dict(l=20, r=20, t=30, b=30), legend_title_text="Status")
-        st.plotly_chart(fig, width='stretch', config={"displaylogo": False, "responsive": True})
+        # plotly_chart doesn't support width='stretch'; leaving as-is for responsiveness
+        st.plotly_chart(fig, use_container_width=True, config={"displaylogo": False, "responsive": True})
 
 # ---------- Members Tab ----------
 with tab3:
