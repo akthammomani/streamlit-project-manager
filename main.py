@@ -91,6 +91,7 @@ def centered_logo(path: str = "logo_1.png", width: int = 160) -> None:
     if not p.is_file():
         p = Path(__file__).with_name(path)
     try:
+        import base64
         b64 = base64.b64encode(p.read_bytes()).decode("utf-8")
         html = f'<div style="text-align:center;"><img src="data:image/png;base64,{b64}" style="width:{width}px;max-width:100%;height:auto;" /></div>'
         st.markdown(html, unsafe_allow_html=True)
@@ -311,7 +312,7 @@ with tab1:
     edited_tasks = st.data_editor(
         df_tasks.sort_values(by="Start", ascending=True, na_position="last"),
         use_container_width=True,
-        hide_index=True,           # <<< no visible id column
+        hide_index=True,           # <<< hides id
         num_rows="dynamic",
         disabled=not CAN_WRITE,
         column_config={
@@ -320,8 +321,12 @@ with tab1:
             "Start": st.column_config.DateColumn("Start"),
             "End": st.column_config.DateColumn("End"),
             "Assignee": st.column_config.TextColumn("Assignee"),
-            # Use NumberColumn so users can type/adjust values easily
-            "Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1),
+            # Editable with progress BAR:
+            "Progress%": st.column_config.ProgressColumn(
+                "Progress %",
+                min_value=0, max_value=100, format="%d%%",
+                help="Type a number (0–100) to update; the bar reflects the value."
+            ),
             "Description": st.column_config.TextColumn("Description", help="Optional notes"),
         },
     )
@@ -428,14 +433,16 @@ with tab1:
     else:
         task_for_sub = st.selectbox(
             "Task",
-            options=[f"{t['id']} · {t['name']}" for t in all_tasks_for_picker],
+            options=[f"{t['name']}" if t["name"] else f"Task {t['id']}" for t in all_tasks_for_picker],
+            index=0,
             key="task_picker_for_subtasks",
         )
+        # Map back selected name to id (fallback if duplicate names: pick first match)
+        picked_task = next((t for t in all_tasks_for_picker if (t["name"] or f"Task {t['id']}") == task_for_sub), None)
+        picked_task_id = picked_task["id"] if picked_task else None
 
-        if task_for_sub:
-            picked_task_id = int(task_for_sub.split("·")[0].strip())
+        if picked_task_id:
             raw_subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(picked_task_id)]
-
             sub_cols = ["Subtask","Status","Start","End","Assignee","Progress%"]
             sub_records = []
             for s_ in raw_subs:
@@ -457,7 +464,7 @@ with tab1:
             edited_subs = st.data_editor(
                 df_subs.sort_values(by="Start", ascending=True, na_position="last"),
                 use_container_width=True,
-                hide_index=True,                   # <<< no visible id column
+                hide_index=True,                   # <<< hides id
                 num_rows="dynamic",
                 disabled=not CAN_WRITE,
                 column_config={
@@ -466,8 +473,12 @@ with tab1:
                     "Start": st.column_config.DateColumn("Start"),
                     "End": st.column_config.DateColumn("End"),
                     "Assignee": st.column_config.TextColumn("Assignee"),
-                    # NumberColumn so it's definitely editable
-                    "Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1),
+                    # Editable with progress BAR:
+                    "Progress%": st.column_config.ProgressColumn(
+                        "Progress %",
+                        min_value=0, max_value=100, format="%d%%",
+                        help="Type a number (0–100) to update; the bar reflects the value."
+                    ),
                 },
             )
 
