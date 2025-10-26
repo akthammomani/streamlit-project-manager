@@ -200,42 +200,42 @@ def full_screen_project_gate(user_email: str):
 def render_contacts_sidebar():
     with st.sidebar:
         st.divider()
+        # Use Streamlit's native heading so it matches "Projects"
+        st.subheader("Contacts")
+
         st.markdown("""
         <style>
-          /* Card blends with sidebar */
-          .contact-card {
-            padding:12px 14px;
-            border:1px solid #e5e7eb;
-            border-radius:16px;
-            background:transparent;     /* ← was var(--tab-bg) */
-            box-shadow:none;            /* remove extra surface shadow */
+          /* Match sidebar control borders (same tone/thickness) */
+          .contact-card{
+            padding:8px 10px;
+            border:1px solid #d1d5db;          /* ≈ same as expander/select borders */
+            border-radius:12px;                 /* similar rounding */
+            background:transparent;             /* blends with sidebar */
           }
-          .contact-title {font-weight:700;margin-bottom:10px;color:#111827;}
-          .contact-grid {display:flex;flex-wrap:wrap;gap:10px;}
-          .contact-btn {
-            display:inline-block; padding:8px 14px; border-radius:999px;
-            border:1px solid #e5e7eb; background:var(--tab-bg); color:#1f2937;
-            text-decoration:none; font-weight:600; font-size:13px;
-            box-shadow:0 1px 0 rgba(17,24,39,.04); transition:all .18s ease-in-out;
+          .contact-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;}
+
+          /* Pills – keep existing hover color from your tabs */
+          .contact-btn{
+            display:inline-block;padding:8px 14px;border-radius:999px;
+            border:1px solid #e5e7eb;background:var(--tab-bg,#f6f7fb);color:#1f2937;
+            text-decoration:none;font-weight:600;font-size:13px;
+            box-shadow:0 1px 0 rgba(17,24,39,.04);transition:all .18s ease-in-out;
           }
-          .contact-btn:hover {
-            background:var(--tab-active); color:#fff; border-color:transparent;
-            transform:translateY(-1px);
-            box-shadow:0 8px 20px rgba(37,99,235,.25);
+          .contact-btn:hover{
+            background:var(--tab-active,#2563eb);color:#fff;border-color:transparent;
+            transform:translateY(-1px);box-shadow:0 8px 20px rgba(37,99,235,.25);
           }
-          .contact-foot {margin-top:8px;color:#6b7280;font-size:12px;}
+          .contact-foot{margin-top:8px;color:#6b7280;font-size:12px;}
 
           /* Dark theme tweaks */
-          @media (prefers-color-scheme: dark) {
-            .contact-card { border-color: rgba(255,255,255,.12); }
-            .contact-btn { border-color: rgba(255,255,255,.12); background:transparent; color:#e5e7eb; }
-            .contact-btn:hover { background:var(--tab-active); color:#fff; }
-            .contact-title { color:#e5e7eb; }
-            .contact-foot { color:#9ca3af; }
+          @media (prefers-color-scheme: dark){
+            .contact-card{border-color:rgba(255,255,255,.12);}
+            .contact-btn{border-color:rgba(255,255,255,.12);background:transparent;color:#e5e7eb;}
+            .contact-btn:hover{background:var(--tab-active,#2563eb);color:#fff;}
+            .contact-foot{color:#9ca3af;}
           }
         </style>
         <div class="contact-card">
-          <div class="contact-title">Contacts</div>
           <div class="contact-grid">
             <a class="contact-btn" href="https://github.com/akthammomani" target="_blank">GitHub</a>
             <a class="contact-btn" href="https://www.linkedin.com/in/akthammomani/" target="_blank">LinkedIn</a>
@@ -245,6 +245,7 @@ def render_contacts_sidebar():
           <div class="contact-foot">© Aktham Momani, 2025. All rights reserved</div>
         </div>
         """, unsafe_allow_html=True)
+
 
 
 
