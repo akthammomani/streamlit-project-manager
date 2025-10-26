@@ -23,9 +23,18 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# Global CSS: hide index/ID column in all tables/editors (header + body)
 st.markdown("""
 <style>
-  [data-testid="stImage"] img { display:block;margin-left:auto;margin-right:auto; }
+div[data-testid="stDataFrame"] thead tr th:first-child,
+div[data-testid="stDataFrame"] tbody tr td:first-child,
+div[data-testid="stDataEditor"] thead tr th:first-child,
+div[data-testid="stDataEditor"] tbody tr td:first-child { display:none !important; }
+div[data-testid="stDataFrame"] thead tr th:nth-child(2),
+div[data-testid="stDataFrame"] tbody tr td:nth-child(2),
+div[data-testid="stDataEditor"] thead tr th:nth-child(2),
+div[data-testid="stDataEditor"] tbody tr td:nth-child(2) { border-left:none !important; }
+[data-testid="stImage"] img { display:block;margin-left:auto;margin-right:auto; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -111,7 +120,7 @@ def full_screen_login():
         with st.form("login_form", clear_on_submit=False):
             email = st.text_input("Your email", placeholder="you@example.com")
             name  = st.text_input("Your name (optional)")
-            submitted = st.form_submit_button("Sign in / Continue", use_container_width=True)
+            submitted = st.form_submit_button("Sign in / Continue", width='stretch')
         if submitted:
             if not email:
                 st.warning("Please enter your email.")
@@ -133,10 +142,10 @@ def full_screen_project_gate(user_email: str):
         st.markdown("<h2 style='text-align:center;margin-top:8px;'>Choose or Create a Project</h2>", unsafe_allow_html=True)
 
         if projects:
-            opt = st.selectbox("Open existing project", options=[f"{p.id} · {p.name}" for p in projects], key="center_open_select")
-            if st.button("Open project", use_container_width=True):
-                sel_id = int(opt.split("·")[0].strip())
-                st.session_state["selected_project_id"] = sel_id
+            # names only
+            opt_proj = st.selectbox("Open existing project", options=projects, format_func=lambda p: p.name)
+            if st.button("Open project", width='stretch'):
+                st.session_state["selected_project_id"] = opt_proj.id
                 force_rerun()
 
         st.markdown("---")
@@ -153,7 +162,7 @@ def full_screen_project_gate(user_email: str):
             with c4:
                 pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="center_pin")
             members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="center_members")
-            submit_new = st.form_submit_button("Create project", use_container_width=True)
+            submit_new = st.form_submit_button("Create project", width='stretch')
 
         if submit_new:
             if not p_name:
@@ -166,7 +175,7 @@ def full_screen_project_gate(user_email: str):
                 members = [m.strip() for m in members_csv.split(",") if m.strip()]
                 pid = db.create_project(user_email, p_name, p_start, p_end, members, is_public=is_public, pin=(pin_val or None))
                 st.session_state["selected_project_id"] = pid
-                st.success(f"Project created (id {pid}).")
+                st.success(f"Project created.")
                 force_rerun()
 
 user = st.session_state.get("user")
@@ -185,7 +194,7 @@ with st.sidebar:
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 3, 1])
     with c2:
-        st.image(load_logo(), use_container_width=True)
+        st.image(load_logo(), width='stretch')
     st.caption(f"Signed in as **{user['email']}**")
     st.markdown("---")
 
@@ -197,16 +206,12 @@ if not current_project:
 
 with st.sidebar:
     st.subheader("Projects")
-    proj_names = [f"{p.id} · {p.name}" for p in _projects_raw]
-    try:
-        default_label = f"{current_project.id} · {current_project.name}"
-        idx = max(0, proj_names.index(default_label))
-    except ValueError:
-        idx = 0
-    chosen = st.selectbox("Open project", options=proj_names, index=idx, key="sidebar_project_select")
-    chosen_id = int(chosen.split("·")[0].strip())
-    if chosen_id != current_project.id:
-        st.session_state["selected_project_id"] = chosen_id
+    # names only
+    ids = [p.id for p in _projects_raw]
+    idx = max(0, ids.index(current_project.id)) if current_project else 0
+    chosen_proj = st.selectbox("Open project", options=_projects_raw, index=idx, format_func=lambda p: p.name)
+    if chosen_proj and chosen_proj.id != current_project.id:
+        st.session_state["selected_project_id"] = chosen_proj.id
         force_rerun()
 
     with st.expander("New project"):
@@ -223,7 +228,7 @@ with st.sidebar:
             pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="sb_pin",
                                     help="Members will need this PIN to open the project.")
         members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="sb_members")
-        if st.button("Create project", use_container_width=True, key="sb_create"):
+        if st.button("Create project", width='stretch', key="sb_create"):
             if not p_name:
                 st.warning("Please enter a project name.")
             elif p_end < p_start:
@@ -234,7 +239,7 @@ with st.sidebar:
                 members = [m.strip() for m in members_csv.split(",") if m.strip()]
                 pid = db.create_project(user["email"], p_name, p_start, p_end, members, is_public=is_public, pin=(pin_val or None))
                 st.session_state["selected_project_id"] = pid
-                st.success(f"Project created (id {pid}).")
+                st.success("Project created.")
                 force_rerun()
 
 st.title(current_project.name)
@@ -308,14 +313,15 @@ with tab1:
 
     task_records = []
     for t in raw_tasks:
+        pct = float(round(t["progress"] or 0, 1))
         task_records.append({
             "Task": t["name"] or "",
             "Status": _norm_status(t["status"]) if t["status"] else "To-Do",
             "Start": t["start_date"],
             "End": t["end_date"],
             "Assignee": t["assignee_email"] or "",
-            "Progress%": float(round(t["progress"] or 0, 1)),
-            "Progress (bar)": float(round(t["progress"] or 0, 1)),  # visual mirror
+            "Progress%": pct,              # editable number
+            "Progress (bar)": pct,         # read-only bar mirror
             "Description": "",
         })
 
@@ -327,11 +333,11 @@ with tab1:
 
     edited_tasks = st.data_editor(
         df_tasks.sort_values(by="Start", ascending=True, na_position="last"),
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="dynamic",
         disabled=not CAN_WRITE,
-        column_order=task_cols,      # ensures only these columns are visible
+        column_order=task_cols,
         column_config={
             "Task": st.column_config.TextColumn("Task", required=True),
             "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS),
@@ -375,7 +381,7 @@ with tab1:
                     prog = float(row.get("Progress%", 0) or 0)
                 except Exception:
                     prog = 0.0
-                prog = float(max(0, min(100, prog)))  # clamp 0..100
+                prog = float(max(0, min(100, prog)))
                 desc  = str(row.get("Description", "")).strip() or None
 
                 db.add_or_update_task(
@@ -444,27 +450,30 @@ with tab1:
     if not all_tasks_for_picker:
         st.caption("Create a task first to add subtasks.")
     else:
+        # names only in the dropdown
         task_for_sub = st.selectbox(
             "Task",
-            options=[f"{t['id']} · {t['name']}" for t in all_tasks_for_picker],
+            options=all_tasks_for_picker,
+            format_func=lambda t: (t["name"] or "Untitled Task"),
             key="task_picker_for_subtasks",
         )
+        picked_task_id = task_for_sub["id"] if task_for_sub else None
 
-        if task_for_sub:
-            picked_task_id = int(task_for_sub.split("·")[0].strip())
+        if picked_task_id:
             raw_subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(picked_task_id)]
 
             sub_cols = ["Subtask","Status","Start","End","Assignee","Progress%","Progress (bar)"]
             sub_records = []
             for s_ in raw_subs:
+                pct = float(round(s_["progress"] or 0, 1))
                 sub_records.append({
                     "Subtask": s_["name"] or "",
                     "Status": _norm_status(s_["status"]) if s_["status"] else "To-Do",
                     "Start": s_["start_date"],
                     "End": s_["end_date"],
                     "Assignee": s_["assignee_email"] or "",
-                    "Progress%": float(round(s_["progress"] or 0, 1)),
-                    "Progress (bar)": float(round(s_["progress"] or 0, 1)),
+                    "Progress%": pct,
+                    "Progress (bar)": pct,
                 })
 
             if sub_records:
@@ -475,7 +484,7 @@ with tab1:
 
             edited_subs = st.data_editor(
                 df_subs.sort_values(by="Start", ascending=True, na_position="last"),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
                 num_rows="dynamic",
                 disabled=not CAN_WRITE,
@@ -618,7 +627,7 @@ with tab2:
             color_discrete_map=status_colors,
         )
         fig.update_layout(margin=dict(l=20, r=20, t=30, b=30), legend_title_text="Status")
-        st.plotly_chart(fig, use_container_width=True, config={"displaylogo": False, "responsive": True})
+        st.plotly_chart(fig, width='stretch', config={"displaylogo": False, "responsive": True})
 
 # ---------- Members Tab ----------
 with tab3:
