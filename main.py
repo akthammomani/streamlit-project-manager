@@ -323,6 +323,18 @@ with st.sidebar.expander("Manage current project"):
                 force_rerun()
     else:
         st.caption("Only the owner can manage this project.")
+# --- Contacts (sidebar) ---
+with st.sidebar:
+    st.divider()
+    with st.expander("Contacts", expanded=False):
+        st.markdown("""
+        [![](https://img.shields.io/badge/GitHub-Follow-informational)](https://github.com/akthammomani)
+        [![](https://img.shields.io/badge/LinkedIn-Connect-informational)](https://www.linkedin.com/in/akthammomani/)
+        [![](https://img.shields.io/badge/Strivio-PM-informational)](https://github.com/akthammomani/strivio-pm)
+        [![](https://img.shields.io/badge/-aktham.momani81@gmail.com-c14438?style=flat-square&logo=Gmail&logoColor=white)](mailto:aktham.momani81@gmail.com)
+        """, unsafe_allow_html=True)
+        st.caption("© Aktham Momani, 2025. All rights reserved.")
+
 
 # ---------- Tabs ----------
 tab1, tab2, tab3 = st.tabs(["Tasks", "Project Analytics", "Members"])
