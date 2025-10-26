@@ -22,6 +22,70 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+# Fancy Tabs CSS — put this after st.set_page_config(...)
+st.markdown("""
+<style>
+/* ---------- Fancy Tabs (pill style) ---------- */
+.stTabs [role="tablist"] {
+  gap: 10px !important;
+  border-bottom: 0 !important;
+  padding: 6px 2px 14px 2px;
+}
+
+/* Base tab */
+.stTabs [role="tab"] {
+  background: #f6f7fb;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 600;
+  transition: all .18s ease-in-out;
+  box-shadow: 0 1px 0 rgba(17, 24, 39, 0.04);
+  outline: none !important;
+}
+
+/* Hover */
+.stTabs [role="tab"]:hover {
+  background: #ffffff;
+  color: #111827;
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(31, 41, 55, 0.06);
+}
+
+/* Active */
+.stTabs [role="tab"][aria-selected="true"] {
+  color: #ffffff;
+  border-color: transparent;
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #ef4444 0%, #f59e0b 50%, #10b981 100%);
+  box-shadow: 0 10px 24px rgba(239, 68, 68, 0.25);
+}
+
+/* Subtle active underline accent */
+.stTabs [role="tab"][aria-selected="true"]::after {
+  content: "";
+  display: block;
+  height: 3px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .85);
+}
+
+/* Improve focus visibility (keyboard users) */
+.stTabs [role="tab"]:focus-visible {
+  outline: 2px solid #6366f1 !important;
+  outline-offset: 2px !important;
+}
+
+/* Optional: compact mode on small screens */
+@media (max-width: 700px) {
+  .stTabs [role="tab"] { padding: 8px 12px; font-weight: 600; }
+  .stTabs [role="tablist"] { gap: 6px !important; }
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Cosmetic
 st.markdown("""
