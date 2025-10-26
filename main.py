@@ -28,6 +28,20 @@ st.markdown("""
   [data-testid="stImage"] img { display:block;margin-left:auto;margin-right:auto; }
 </style>
 """, unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* Hide row index column (header + body) for DataFrame/DataEditor across Streamlit versions */
+div[data-testid="stDataFrame"] thead tr th:first-child,
+div[data-testid="stDataFrame"] tbody tr td:first-child,
+div[data-testid="stDataEditorGrid"] thead tr th:first-child,
+div[data-testid="stDataEditorGrid"] tbody tr td:first-child { display: none !important; }
+/* Remove left border on the new first visible column */
+div[data-testid="stDataFrame"] thead tr th:nth-child(2),
+div[data-testid="stDataFrame"] tbody tr td:nth-child(2),
+div[data-testid="stDataEditorGrid"] thead tr th:nth-child(2),
+div[data-testid="stDataEditorGrid"] tbody tr td:nth-child(2) { border-left: none !important; }
+</style>
+""", unsafe_allow_html=True)
 
 # ---------- helpers ----------
 STATUS_OPTIONS = ["To-Do", "In Progress", "Done"]
