@@ -15,10 +15,16 @@ from pathlib import Path
 from PIL import Image
 import db
 
+def load_icon(name="logo_1.png"):
+    p = Path(name)
+    if not p.is_file():
+        p = Path(__file__).with_name(name)   
+    return Image.open(p)
+    
 # --- App chrome ---
 st.set_page_config(
     page_title="Strivio - Project Manager",
-    page_icon="logo_1.png",
+    page_icon=load_icon(), #"logo_1.png",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
