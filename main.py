@@ -22,12 +22,12 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-# Fancy Tabs CSS — put this after st.set_page_config(...)
+# Solid Tabs theme (keep this once)
 st.markdown("""
 <style>
 :root{
-  --tab-active:#2563eb;   /* <<< change this to your brand color */
-  --tab-bg:#f6f7fb;
+  --tab-active:#2563eb;   /* active + hover color for tabs AND contact pills */
+  --tab-bg:#f6f7fb;       /* base surface */
   --tab-text:#374151;
 }
 .stTabs [role="tablist"]{gap:10px;padding:6px 2px 14px 2px;border-bottom:0;}
@@ -48,13 +48,9 @@ st.markdown("""
   content:""; display:block; height:3px; margin-top:6px; border-radius:999px;
   background:rgba(255,255,255,.85);
 }
-.stTabs [role="tab"]:focus-visible{outline:2px solid #6366f1; outline-offset:2px;}
-@media (max-width:700px){
-  .stTabs [role="tab"]{padding:8px 12px;}
-  .stTabs [role="tablist"]{gap:6px;}
-}
 </style>
 """, unsafe_allow_html=True)
+
 
 # Cosmetic
 st.markdown("""
@@ -206,27 +202,38 @@ def render_contacts_sidebar():
         st.divider()
         st.markdown("""
         <style>
-          .contact-card {padding:10px 12px;border:1px solid #e5e7eb;border-radius:14px;background:#f9fafb;}
-          .contact-title {font-weight:700;margin-bottom:8px;color:#111827;}
-          .contact-grid {display:flex;flex-wrap:wrap;gap:8px;}
-          .contact-btn {
-            display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid #e5e7eb;
-            background:#ffffff;color:#111827;text-decoration:none;font-weight:600;font-size:13px;
-            box-shadow:0 1px 0 rgba(17,24,39,.04);transition:.15s ease;
+          .contact-card {
+            padding:12px 14px; border:1px solid #e5e7eb; border-radius:16px;
+            background:var(--tab-bg);  /* matches tab base */
+            box-shadow:0 1px 0 rgba(17,24,39,.04);
           }
-          .contact-btn:hover {transform:translateY(-1px);box-shadow:0 6px 16px rgba(31,41,55,.06);}
+          .contact-title {font-weight:700;margin-bottom:10px;color:#111827;}
+          .contact-grid {display:flex;flex-wrap:wrap;gap:10px;}
+          .contact-btn {
+            display:inline-block; padding:8px 14px; border-radius:999px;
+            border:1px solid #e5e7eb; background:var(--tab-bg); color:#1f2937;
+            text-decoration:none; font-weight:600; font-size:13px;
+            box-shadow:0 1px 0 rgba(17,24,39,.04); transition:all .18s ease-in-out;
+          }
+          .contact-btn:hover {
+            background:var(--tab-active); color:#fff; border-color:transparent;
+            transform:translateY(-1px);
+            box-shadow:0 8px 20px rgba(37,99,235,.25); /* same vibe as active tab */
+          }
+          .contact-foot {margin-top:8px;color:#6b7280;font-size:12px;}
         </style>
         <div class="contact-card">
           <div class="contact-title">Contacts</div>
           <div class="contact-grid">
             <a class="contact-btn" href="https://github.com/akthammomani" target="_blank">GitHub</a>
             <a class="contact-btn" href="https://www.linkedin.com/in/akthammomani/" target="_blank">LinkedIn</a>
-            <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM</a>
+            <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM Github</a>
             <a class="contact-btn" href="mailto:aktham.momani81@gmail.com">Email</a>
           </div>
-          <div style="margin-top:8px;"><span style="color:#6b7280;font-size:12px;">© Aktham Momani, 2025.</span></div>
+          <div class="contact-foot">© Aktham Momani, 2025. . All rights reserved</div>
         </div>
         """, unsafe_allow_html=True)
+
 
 
 user = st.session_state.get("user")
