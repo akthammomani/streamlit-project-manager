@@ -255,14 +255,34 @@ IS_OWNER  = role == "owner"
 
 with st.sidebar.expander("Manage current project"):
     if IS_OWNER:
+        # Name edit
         new_name = st.text_input("Rename project", value=current_project.name, key="rename_proj")
-        colA, colB = st.columns(2)
-        with colA:
+
+        # Date edits (pre-filled)
+        c_dates1, c_dates2 = st.columns(2)
+        with c_dates1:
+            new_start = st.date_input("Start date", value=current_project.start_date, key="proj_start_edit")
+        with c_dates2:
+            new_end = st.date_input("End date", value=current_project.end_date, key="proj_end_edit")
+
+        cA, cB, cC = st.columns(3)
+        with cA:
             if st.button("Save name", key="save_project_name"):
                 db.rename_project(current_project.id, new_name)
                 st.success("Project renamed.")
                 force_rerun()
-        with colB:
+        with cB:
+            if st.button("Save dates", key="save_project_dates"):
+                if new_end < new_start:
+                    st.warning("End date must be after start date.")
+                else:
+                    ok = db.update_project_dates(current_project.id, new_start, new_end)
+                    if not ok:
+                        st.error("Updating dates failed.")
+                    else:
+                        st.success("Project dates updated.")
+                        force_rerun()
+        with cC:
             if st.button("Delete project", type="secondary", key="delete_project_btn"):
                 db.delete_project(current_project.id)
                 st.success("Project deleted.")
@@ -270,6 +290,7 @@ with st.sidebar.expander("Manage current project"):
                 force_rerun()
     else:
         st.caption("Only the owner can manage this project.")
+
 
 # ---------- Tabs ----------
 tab1, tab2, tab3 = st.tabs(["Tasks", "Gantt", "Members"])
