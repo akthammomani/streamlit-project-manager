@@ -91,7 +91,6 @@ def centered_logo(path: str = "logo_1.png", width: int = 160) -> None:
     if not p.is_file():
         p = Path(__file__).with_name(path)
     try:
-        import base64
         b64 = base64.b64encode(p.read_bytes()).decode("utf-8")
         html = f'<div style="text-align:center;"><img src="data:image/png;base64,{b64}" style="width:{width}px;max-width:100%;height:auto;" /></div>'
         st.markdown(html, unsafe_allow_html=True)
@@ -288,6 +287,13 @@ with tab1:
     if not CAN_WRITE:
         st.info("You have read-only access to this project.")
 
+    # Toggle: editable numbers vs. read-only bar
+    edit_progress = st.toggle(
+        "Enable progress editing",
+        value=True,
+        help="Turn OFF to show progress as bars (read-only)."
+    )
+
     raw_tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
     task_cols = ["Task", "Status", "Start", "End", "Assignee", "Progress%", "Description"]
 
@@ -305,28 +311,30 @@ with tab1:
 
     if task_records:
         df_tasks = pd.DataFrame(task_records, columns=task_cols, index=[t["id"] for t in raw_tasks])
-        df_tasks.index.name = "id"   # hidden; used to detect updates/deletes
+        df_tasks.index.name = "id"   # keep as hidden index
     else:
         df_tasks = pd.DataFrame(columns=task_cols)
+
+    progress_cfg = (
+        st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%")
+        if edit_progress else
+        st.column_config.ProgressColumn("Progress %", min_value=0, max_value=100, format="%d%%")
+    )
 
     edited_tasks = st.data_editor(
         df_tasks.sort_values(by="Start", ascending=True, na_position="last"),
         use_container_width=True,
-        hide_index=True,           # <<< hides id
+        hide_index=True,             # hide the 'id' index
         num_rows="dynamic",
         disabled=not CAN_WRITE,
+        column_order=task_cols,      # hard-hide any stray 'id' column on older Streamlit
         column_config={
             "Task": st.column_config.TextColumn("Task", required=True),
             "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS),
             "Start": st.column_config.DateColumn("Start"),
             "End": st.column_config.DateColumn("End"),
             "Assignee": st.column_config.TextColumn("Assignee"),
-            # Editable with progress BAR:
-            "Progress%": st.column_config.ProgressColumn(
-                "Progress %",
-                min_value=0, max_value=100, format="%d%%",
-                help="Type a number (0–100) to update; the bar reflects the value."
-            ),
+            "Progress%": progress_cfg,
             "Description": st.column_config.TextColumn("Description", help="Optional notes"),
         },
     )
@@ -433,16 +441,14 @@ with tab1:
     else:
         task_for_sub = st.selectbox(
             "Task",
-            options=[f"{t['name']}" if t["name"] else f"Task {t['id']}" for t in all_tasks_for_picker],
-            index=0,
+            options=[f"{t['id']} · {t['name']}" for t in all_tasks_for_picker],
             key="task_picker_for_subtasks",
         )
-        # Map back selected name to id (fallback if duplicate names: pick first match)
-        picked_task = next((t for t in all_tasks_for_picker if (t["name"] or f"Task {t['id']}") == task_for_sub), None)
-        picked_task_id = picked_task["id"] if picked_task else None
 
-        if picked_task_id:
+        if task_for_sub:
+            picked_task_id = int(task_for_sub.split("·")[0].strip())
             raw_subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(picked_task_id)]
+
             sub_cols = ["Subtask","Status","Start","End","Assignee","Progress%"]
             sub_records = []
             for s_ in raw_subs:
@@ -457,28 +463,30 @@ with tab1:
 
             if sub_records:
                 df_subs = pd.DataFrame(sub_records, columns=sub_cols, index=[s["id"] for s in raw_subs])
-                df_subs.index.name = "id"           # hidden id
+                df_subs.index.name = "id"           # keep as hidden index
             else:
                 df_subs = pd.DataFrame(columns=sub_cols)
+
+            progress_cfg_sub = (
+                st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%")
+                if edit_progress else
+                st.column_config.ProgressColumn("Progress %", min_value=0, max_value=100, format="%d%%")
+            )
 
             edited_subs = st.data_editor(
                 df_subs.sort_values(by="Start", ascending=True, na_position="last"),
                 use_container_width=True,
-                hide_index=True,                   # <<< hides id
+                hide_index=True,                   # hide 'id'
                 num_rows="dynamic",
                 disabled=not CAN_WRITE,
+                column_order=sub_cols,             # hard-hide any stray 'id'
                 column_config={
                     "Subtask": st.column_config.TextColumn("Subtask", required=True),
                     "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS),
                     "Start": st.column_config.DateColumn("Start"),
                     "End": st.column_config.DateColumn("End"),
                     "Assignee": st.column_config.TextColumn("Assignee"),
-                    # Editable with progress BAR:
-                    "Progress%": st.column_config.ProgressColumn(
-                        "Progress %",
-                        min_value=0, max_value=100, format="%d%%",
-                        help="Type a number (0–100) to update; the bar reflects the value."
-                    ),
+                    "Progress%": progress_cfg_sub,
                 },
             )
 
