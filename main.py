@@ -698,7 +698,8 @@ with tab2:
 
     st.markdown("---")
     # ---- Upcoming deadlines (next 14 days)
-    st.caption("Upcoming deadlines (next 14 days)")
+    st.markdown("### Upcoming deadlines (next 14 days)")
+    #st.caption("Upcoming deadlines (next 14 days)")
     if not dfA.empty:
         soon_mask = dfA["end_date"].notna() & (~dfA["is_done"]) & (dfA["end_date"] >= today) & (dfA["end_date"] <= (today + pd.Timedelta(days=14)))
         upcoming = dfA.loc[soon_mask, ["name","_type","assignee_email","status","end_date","progress"]].sort_values("end_date")
