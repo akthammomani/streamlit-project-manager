@@ -202,10 +202,13 @@ def render_contacts_sidebar():
         st.divider()
         st.markdown("""
         <style>
+          /* Card blends with sidebar */
           .contact-card {
-            padding:12px 14px; border:1px solid #e5e7eb; border-radius:16px;
-            background:var(--tab-bg);  /* matches tab base */
-            box-shadow:0 1px 0 rgba(17,24,39,.04);
+            padding:12px 14px;
+            border:1px solid #e5e7eb;
+            border-radius:16px;
+            background:transparent;     /* ← was var(--tab-bg) */
+            box-shadow:none;            /* remove extra surface shadow */
           }
           .contact-title {font-weight:700;margin-bottom:10px;color:#111827;}
           .contact-grid {display:flex;flex-wrap:wrap;gap:10px;}
@@ -218,21 +221,31 @@ def render_contacts_sidebar():
           .contact-btn:hover {
             background:var(--tab-active); color:#fff; border-color:transparent;
             transform:translateY(-1px);
-            box-shadow:0 8px 20px rgba(37,99,235,.25); /* same vibe as active tab */
+            box-shadow:0 8px 20px rgba(37,99,235,.25);
           }
           .contact-foot {margin-top:8px;color:#6b7280;font-size:12px;}
+
+          /* Dark theme tweaks */
+          @media (prefers-color-scheme: dark) {
+            .contact-card { border-color: rgba(255,255,255,.12); }
+            .contact-btn { border-color: rgba(255,255,255,.12); background:transparent; color:#e5e7eb; }
+            .contact-btn:hover { background:var(--tab-active); color:#fff; }
+            .contact-title { color:#e5e7eb; }
+            .contact-foot { color:#9ca3af; }
+          }
         </style>
         <div class="contact-card">
           <div class="contact-title">Contacts</div>
           <div class="contact-grid">
             <a class="contact-btn" href="https://github.com/akthammomani" target="_blank">GitHub</a>
             <a class="contact-btn" href="https://www.linkedin.com/in/akthammomani/" target="_blank">LinkedIn</a>
-            <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM Github</a>
+            <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM GitHub</a>
             <a class="contact-btn" href="mailto:aktham.momani81@gmail.com">Email</a>
           </div>
-          <div class="contact-foot">© Aktham Momani, 2025. . All rights reserved</div>
+          <div class="contact-foot">© Aktham Momani, 2025. All rights reserved</div>
         </div>
         """, unsafe_allow_html=True)
+
 
 
 
