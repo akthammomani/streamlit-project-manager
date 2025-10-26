@@ -662,34 +662,39 @@ with tab2:
     else:
         st.info("Add start/end dates to items to see them on the timeline.")
 
-    # ---- Horizontal bars: Distribution by Status ----
-    st.caption("Distribution by status")
-    status_order = ["To-Do","In Progress","Done"]
-    status_counts = (
-        dfA.groupby("status").size().reindex(status_order).fillna(0).astype(int).reset_index(name="count")
-        if not dfA.empty else pd.DataFrame({"status": status_order, "count": [0,0,0]})
-    )
-    fig_status = px.bar(
-        status_counts, y="status", x="count", text="count", title="Items by Status", orientation="h"
-    )
-    fig_status.update_traces(textposition="outside")
-    fig_status.update_layout(margin=dict(l=10, r=10, t=40, b=10), yaxis_title="")
-    st.plotly_chart(fig_status, use_container_width=True, config={"displaylogo": False, "responsive": True})
+   # ---- Status & Assignee Breakdown (side-by-side, single titles) ----
+    st.markdown("### Status & Assignee Breakdown")
+    
+    col1, col2 = st.columns(2, gap="medium")
+    
+    with col1:
+        st.markdown("**Distribution by Status**")
+        status_order = ["To-Do","In Progress","Done"]
+        status_counts = (
+            dfA.groupby("status").size().reindex(status_order).fillna(0).astype(int).reset_index(name="count")
+            if not dfA.empty else pd.DataFrame({"status": status_order, "count": [0,0,0]})
+        )
+        fig_status = px.bar(
+            status_counts, y="status", x="count", text="count", orientation="h"
+        )
+        fig_status.update_traces(textposition="outside")
+        fig_status.update_layout(margin=dict(l=10, r=10, t=10, b=10), yaxis_title="", xaxis_title="")
+        st.plotly_chart(fig_status, use_container_width=True, config={"displaylogo": False, "responsive": True})
+    
+    with col2:
+        st.markdown("**Workload by Assignee**")
+        assignee_counts = (
+            dfA.assign(assignee=dfA["assignee_email"].fillna("Unassigned"))
+               .groupby("assignee").size().sort_values(ascending=True).reset_index(name="count")
+            if not dfA.empty else pd.DataFrame({"assignee": [], "count": []})
+        )
+        fig_assignee = px.bar(
+            assignee_counts, y="assignee", x="count", text="count", orientation="h"
+        )
+        fig_assignee.update_traces(textposition="outside")
+        fig_assignee.update_layout(margin=dict(l=10, r=10, t=10, b=10), yaxis_title="", xaxis_title="")
+        st.plotly_chart(fig_assignee, use_container_width=True, config={"displaylogo": False, "responsive": True})
 
-    # ---- Horizontal bars: Workload by Assignee ----
-    st.caption("Workload by assignee")
-    assignee_counts = (
-        dfA.assign(assignee=dfA["assignee_email"].fillna("Unassigned"))
-           .groupby("assignee").size().sort_values(ascending=True)  # ascending for nice horizontal chart
-           .reset_index(name="count")
-        if not dfA.empty else pd.DataFrame({"assignee": [], "count": []})
-    )
-    fig_assignee = px.bar(
-        assignee_counts, y="assignee", x="count", text="count", title="Items by Assignee", orientation="h"
-    )
-    fig_assignee.update_traces(textposition="outside")
-    fig_assignee.update_layout(margin=dict(l=10, r=10, t=40, b=10), yaxis_title="")
-    st.plotly_chart(fig_assignee, use_container_width=True, config={"displaylogo": False, "responsive": True})
 
     # ---- Upcoming deadlines (next 14 days)
     st.caption("Upcoming deadlines (next 14 days)")
