@@ -355,7 +355,7 @@ with st.sidebar.expander("Manage current project"):
                 force_rerun()
     else:
         st.caption("Only the owner can manage this project.")
-        render_contacts_sidebar()
+    render_contacts_sidebar()
 # ---------- Tabs ----------
 tab1, tab2, tab3 = st.tabs(["Tasks", "Project Analytics", "Members"])
 
