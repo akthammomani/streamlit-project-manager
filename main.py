@@ -23,7 +23,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# center all st.image by default
 st.markdown("""
 <style>
   [data-testid="stImage"] img { display:block;margin-left:auto;margin-right:auto; }
@@ -54,10 +53,8 @@ def _norm_status(s: str) -> str:
     }
     return mapping.get(s, s.title())
 
-# convert ORM rows to dicts that are UI-safe
 def _to_task_dict(t):
-    if isinstance(t, dict):
-        return t
+    if isinstance(t, dict): return t
     assignee_email = getattr(getattr(t, "assignee", None), "email", None)
     return {
         "id": getattr(t, "id", None),
@@ -70,8 +67,7 @@ def _to_task_dict(t):
     }
 
 def _to_subtask_dict(s):
-    if isinstance(s, dict):
-        return s
+    if isinstance(s, dict): return s
     assignee_email = getattr(getattr(s, "assignee", None), "email", None)
     return {
         "id": getattr(s, "id", None),
@@ -292,9 +288,8 @@ with tab1:
         st.info("You have read-only access to this project.")
 
     raw_tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
-
-    # Build the editable DataFrame (keep columns even when empty!)
     task_cols = ["Task", "Status", "Start", "End", "Assignee", "Progress%", "Description"]
+
     task_records = []
     for t in raw_tasks:
         task_records.append({
@@ -309,14 +304,14 @@ with tab1:
 
     if task_records:
         df_tasks = pd.DataFrame(task_records, columns=task_cols, index=[t["id"] for t in raw_tasks])
-        df_tasks.index.name = "id"          # keep ids (hidden) to detect edits/deletes
+        df_tasks.index.name = "id"   # hidden; used to detect updates/deletes
     else:
-        df_tasks = pd.DataFrame(columns=task_cols)  # enables “Add row” when empty
+        df_tasks = pd.DataFrame(columns=task_cols)
 
     edited_tasks = st.data_editor(
         df_tasks.sort_values(by="Start", ascending=True, na_position="last"),
         use_container_width=True,
-        hide_index=True,
+        hide_index=True,           # <<< no visible id column
         num_rows="dynamic",
         disabled=not CAN_WRITE,
         column_config={
@@ -325,34 +320,26 @@ with tab1:
             "Start": st.column_config.DateColumn("Start"),
             "End": st.column_config.DateColumn("End"),
             "Assignee": st.column_config.TextColumn("Assignee"),
-            "Progress%": st.column_config.ProgressColumn(
-                "Progress", format="%d%%", min_value=0, max_value=100
-            ),
+            # Use NumberColumn so users can type/adjust values easily
+            "Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1),
             "Description": st.column_config.TextColumn("Description", help="Optional notes"),
         },
     )
 
-    # Save button for tasks
     if CAN_WRITE and st.button("💾 Save task changes"):
         try:
             orig_ids = {t["id"] for t in raw_tasks if t["id"] is not None}
             edited_df = edited_tasks.copy()
 
-            # Deletions: ids that existed but no longer present in edited_df index
-            edited_ids = set()
             if edited_df.index.name == "id":
-                # If we still have id-based index
                 edited_ids = {i for i in edited_df.index if isinstance(i, int)}
                 to_delete = orig_ids - edited_ids
             else:
-                # No id index (e.g., started empty), nothing to delete
                 to_delete = set()
 
             for del_id in to_delete:
                 db.delete_task(int(del_id))
 
-            # Upserts (create/update)
-            # If index has ids, iterate preserving index; else treat all rows as new
             if edited_df.index.name == "id":
                 iterable = edited_df.iterrows()
             else:
@@ -370,6 +357,7 @@ with tab1:
                     prog = float(row.get("Progress%", 0) or 0)
                 except Exception:
                     prog = 0.0
+                prog = float(max(0, min(100, prog)))  # clamp 0..100
                 desc  = str(row.get("Description", "")).strip() or None
 
                 db.add_or_update_task(
@@ -381,7 +369,7 @@ with tab1:
                     assignee_email=assg,
                     description=desc,
                     task_id=int(maybe_id) if (maybe_id in orig_ids) else None,
-                    progress=float(max(0, min(100, prog))),
+                    progress=prog,
                 )
 
             st.success("Tasks saved.")
@@ -389,7 +377,6 @@ with tab1:
         except Exception as e:
             st.error(f"Save failed: {e}")
 
-    # CSV import (only extra control kept)
     st.caption("Import tasks from CSV (Task, Status, Start, End, Assignee, Progress%, Description)")
     up = st.file_uploader(" ", type=["csv"], accept_multiple_files=False, key="task_csv_import", label_visibility="collapsed")
     if up is not None and CAN_WRITE:
@@ -408,7 +395,9 @@ with tab1:
                     prog = float(r.get("Progress%", 0) or 0)
                 except Exception:
                     prog = 0.0
+                prog = float(max(0, min(100, prog)))
                 desc  = str(r.get("Description", "")).strip() or None
+
                 db.add_or_update_task(
                     project_id=current_project.id,
                     name=name,
@@ -418,7 +407,7 @@ with tab1:
                     assignee_email=assg,
                     description=desc,
                     task_id=None,
-                    progress=float(max(0, min(100, prog))),
+                    progress=prog,
                 )
                 created += 1
             st.success(f"Imported {created} task(s).")
@@ -433,7 +422,6 @@ with tab1:
     # =========================
     st.subheader("Subtasks")
 
-    # Need a task context to edit subtasks
     all_tasks_for_picker = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
     if not all_tasks_for_picker:
         st.caption("Create a task first to add subtasks.")
@@ -462,14 +450,14 @@ with tab1:
 
             if sub_records:
                 df_subs = pd.DataFrame(sub_records, columns=sub_cols, index=[s["id"] for s in raw_subs])
-                df_subs.index.name = "id"
+                df_subs.index.name = "id"           # hidden id
             else:
                 df_subs = pd.DataFrame(columns=sub_cols)
 
             edited_subs = st.data_editor(
                 df_subs.sort_values(by="Start", ascending=True, na_position="last"),
                 use_container_width=True,
-                hide_index=True,
+                hide_index=True,                   # <<< no visible id column
                 num_rows="dynamic",
                 disabled=not CAN_WRITE,
                 column_config={
@@ -478,9 +466,8 @@ with tab1:
                     "Start": st.column_config.DateColumn("Start"),
                     "End": st.column_config.DateColumn("End"),
                     "Assignee": st.column_config.TextColumn("Assignee"),
-                    "Progress%": st.column_config.ProgressColumn(
-                        "Progress", format="%d%%", min_value=0, max_value=100
-                    ),
+                    # NumberColumn so it's definitely editable
+                    "Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1),
                 },
             )
 
@@ -515,6 +502,7 @@ with tab1:
                             prog = float(row.get("Progress%", 0) or 0)
                         except Exception:
                             prog = 0.0
+                        prog = float(max(0, min(100, prog)))
 
                         db.add_or_update_subtask(
                             task_id=picked_task_id,
@@ -524,7 +512,7 @@ with tab1:
                             end=end,
                             assignee_email=assg,
                             subtask_id=int(maybe_id) if (maybe_id in orig_ids) else None,
-                            progress=float(max(0, min(100, prog))),
+                            progress=prog,
                         )
 
                     st.success("Subtasks saved.")
@@ -551,6 +539,7 @@ with tab1:
                             prog = float(r.get("Progress%", 0) or 0)
                         except Exception:
                             prog = 0.0
+                        prog = float(max(0, min(100, prog)))
                         db.add_or_update_subtask(
                             task_id=picked_task_id,
                             name=name,
@@ -559,7 +548,7 @@ with tab1:
                             end=end,
                             assignee_email=assg,
                             subtask_id=None,
-                            progress=float(max(0, min(100, prog))),
+                            progress=prog,
                         )
                         created += 1
                     st.success(f"Imported {created} subtask(s).")
@@ -598,9 +587,9 @@ with tab2:
     else:
         df = pd.DataFrame(rows)
         status_colors = {
-            "To-Do":       "#9CA3AF",  # gray
-            "In Progress": "#2563EB",  # blue
-            "Done":        "#10B981",  # green
+            "To-Do":       "#9CA3AF",
+            "In Progress": "#2563EB",
+            "Done":        "#10B981",
         }
         df["Status"] = pd.Categorical(df["Status"], categories=list(status_colors.keys()), ordered=True)
         fig = px.timeline(
