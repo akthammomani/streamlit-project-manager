@@ -53,7 +53,7 @@
   - **Timeline (Gantt)** for tasks + subtasks.  
   - **Distribution by Status** (horizontal bars).  
   - **Workload by Assignee** (horizontal bars).  
-  - **Schedule health**: days elapsed/remaining, % complete, and **At-Risk / Hygiene** checks (shows “All good” if nothing concerning).
+  - **Schedule health**: days elapsed/remaining, % complete, and **At-Risk / Hygiene** checks (shows "All good" if nothing concerning).
 - **Collaboration**  
   - Multi-user via email invites (roles: owner, editor, viewer).
 - **Persistence**  
@@ -78,7 +78,7 @@
 ## Usage
 
 - **Create / Open a project**
-  - In the sidebar, **New project** → set Name, Start, End, optional member emails, and public/PIN.
+  - In the sidebar, **New project** -> set Name, Start, End, optional member emails, and public/PIN.
   - Use **Open project** to switch projects.
   - **Manage current project**: rename, **change start/end dates**, or delete.
 
