@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# (Cosmetic only)
+# Simple cosmetic tweak for centered logo
 st.markdown("""
 <style>
   [data-testid="stImage"] img { display:block;margin-left:auto;margin-right:auto; }
@@ -258,7 +258,7 @@ with st.sidebar.expander("Manage current project"):
         # Name edit
         new_name = st.text_input("Rename project", value=current_project.name, key="rename_proj")
 
-        # Date edits (pre-filled)
+        # Date edits
         c_dates1, c_dates2 = st.columns(2)
         with c_dates1:
             new_start = st.date_input("Start date", value=current_project.start_date, key="proj_start_edit")
@@ -291,11 +291,10 @@ with st.sidebar.expander("Manage current project"):
     else:
         st.caption("Only the owner can manage this project.")
 
-
 # ---------- Tabs ----------
-tab1, tab2, tab3 = st.tabs(["Tasks", "Gantt", "Members"])
+tab1, tab2, tab3 = st.tabs(["Tasks", "Project Analytics", "Members"])
 
-# ---------- mapping helpers (no index-based IDs) ----------
+# ---------- row-id mapping helpers (no index-based IDs) ----------
 def _build_row_id_map(df_sorted: pd.DataFrame, ids_sorted: list[int]) -> dict[int, int]:
     return {int(i): int(ids_sorted[i]) for i in range(len(ids_sorted)) if ids_sorted[i] is not None}
 
@@ -441,193 +440,196 @@ with tab1:
         except Exception as e:
             st.error(f"Import failed: {e}")
 
+# =======================
+# Project Analytics Tab
+# =======================
+with tab2:
+    st.subheader("Project Analytics")
+
+    # Load tasks
+    tasks_raw = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
+
+    # Include subtasks in rollups (toggle)
+    include_subtasks = st.checkbox("Include subtasks in analytics", value=True)
+    if include_subtasks:
+        subs_all = []
+        for t in tasks_raw:
+            subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
+            for s in subs:
+                subs_all.append({
+                    "id": s["id"], "name": s["name"],
+                    "status": _norm_status(s["status"]),
+                    "start_date": s["start_date"], "end_date": s["end_date"],
+                    "assignee_email": s["assignee_email"],
+                    "progress": float(s["progress"] or 0),
+                    "_type": "Subtask"
+                })
+        tasks_table = [
+            {
+                "id": t["id"], "name": t["name"],
+                "status": _norm_status(t["status"]),
+                "start_date": t["start_date"], "end_date": t["end_date"],
+                "assignee_email": t["assignee_email"],
+                "progress": float(t["progress"] or 0),
+                "_type": "Task"
+            } for t in tasks_raw
+        ] + subs_all
+    else:
+        tasks_table = [
+            {
+                "id": t["id"], "name": t["name"],
+                "status": _norm_status(t["status"]),
+                "start_date": t["start_date"], "end_date": t["end_date"],
+                "assignee_email": t["assignee_email"],
+                "progress": float(t["progress"] or 0),
+                "_type": "Task"
+            } for t in tasks_raw
+        ]
+
+    today = date.today()
+    dfA = pd.DataFrame(tasks_table)
+
+    # Derived fields
+    if not dfA.empty:
+        dfA["is_done"] = dfA["status"].fillna("").eq("Done")
+        dfA["has_dates"] = dfA["start_date"].notna() & dfA["end_date"].notna()
+        dfA["is_overdue"] = dfA["end_date"].notna() & (dfA["end_date"] < today) & (~dfA["is_done"])
+    else:
+        dfA["is_done"] = []
+        dfA["has_dates"] = []
+        dfA["is_overdue"] = []
+
+    # Project timeframe KPIs
+    p_start = current_project.start_date
+    p_end   = current_project.end_date
+    total_days = max(0, (p_end - p_start).days + 1)
+    elapsed_days = 0
+    if today >= p_start:
+        elapsed_days = (min(today, p_end) - p_start).days + 1
+        elapsed_days = max(0, min(elapsed_days, total_days))
+    remaining_days = max(0, total_days - elapsed_days)
+
+    # Work KPIs
+    total_items = len(dfA)
+    done_items = int(dfA["is_done"].sum()) if total_items else 0
+    open_items = total_items - done_items
+    overdue_items = int(dfA["is_overdue"].sum()) if total_items else 0
+    overall_progress = round(float(dfA["progress"].mean()) if total_items else 0.0, 1)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1: st.metric("Days Total", total_days)
+    with c2: st.metric("Days Remaining", remaining_days)
+    with c3: st.metric("Items (Open/Total)", f"{open_items}/{total_items}")
+    with c4: st.metric("Overdue", overdue_items)
+    with c5: st.metric("Overall % Complete", f"{overall_progress}%")
+
     st.markdown("---")
 
-    # =========================
-    # Subtasks inline editor
-    # =========================
-    st.subheader("Subtasks")
+    # Tasks by Status
+    st.caption("Distribution by status")
+    status_order = ["To-Do","In Progress","Done"]
+    status_counts = (
+        dfA.groupby("status").size().reindex(status_order).fillna(0).astype(int).reset_index(name="count")
+        if not dfA.empty else pd.DataFrame({"status": status_order, "count": [0,0,0]})
+    )
+    fig_status = px.bar(status_counts, x="status", y="count", text="count", title="Items by Status")
+    fig_status.update_traces(textposition="outside")
+    fig_status.update_layout(margin=dict(l=10, r=10, t=40, b=10))
+    st.plotly_chart(fig_status, use_container_width=True, config={"displaylogo": False, "responsive": True})
 
-    all_tasks_for_picker = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
-    if not all_tasks_for_picker:
-        st.caption("Create a task first to add subtasks.")
+    # Tasks by Assignee
+    st.caption("Workload by assignee")
+    assignee_counts = (
+        dfA.assign(assignee=dfA["assignee_email"].fillna("Unassigned"))
+           .groupby("assignee").size().sort_values(ascending=False).reset_index(name="count")
+        if not dfA.empty else pd.DataFrame({"assignee": [], "count": []})
+    )
+    fig_assignee = px.bar(assignee_counts, x="assignee", y="count", text="count", title="Items by Assignee")
+    fig_assignee.update_traces(textposition="outside")
+    fig_assignee.update_layout(xaxis_title="", margin=dict(l=10, r=10, t=40, b=80))
+    st.plotly_chart(fig_assignee, use_container_width=True, config={"displaylogo": False, "responsive": True})
+
+    # Upcoming deadlines (next 14 days)
+    st.caption("Upcoming deadlines (next 14 days)")
+    if not dfA.empty:
+        soon_mask = dfA["end_date"].notna() & (~dfA["is_done"]) & (dfA["end_date"] >= today) & (dfA["end_date"] <= (today + pd.Timedelta(days=14)))
+        upcoming = dfA.loc[soon_mask, ["name","_type","assignee_email","status","end_date","progress"]].sort_values("end_date")
     else:
-        task_for_sub = st.selectbox(
-            "Task",
-            options=all_tasks_for_picker,
-            format_func=lambda t: (t["name"] or "Untitled Task"),
-            key="task_picker_for_subtasks",
+        upcoming = pd.DataFrame(columns=["name","_type","assignee_email","status","end_date","progress"])
+    if not upcoming.empty:
+        st.data_editor(
+            upcoming.rename(columns={
+                "name":"Item", "_type":"Type", "assignee_email":"Assignee",
+                "status":"Status", "end_date":"Due", "progress":"Progress%"
+            }).reset_index(drop=True),
+            width="stretch", hide_index=True, disabled=True,
+            column_config={
+                "Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%")
+            }
         )
-        picked_task_id = task_for_sub["id"] if task_for_sub else None
+    else:
+        st.info("No upcoming deadlines in the next 14 days.")
 
-        if picked_task_id:
-            raw_subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(picked_task_id)]
+    st.markdown("---")
 
-            sub_cols = ["Subtask","Status","Start","End","Assignee","Progress%"]
-            rows_s, ids_for_rows_s = [], []
-            for s_ in raw_subs:
-                pct = float(round(s_["progress"] or 0, 1))
-                rows_s.append({
-                    "Subtask": s_["name"] or "",
-                    "Status": _norm_status(s_["status"]) if s_["status"] else "To-Do",
-                    "Start": s_["start_date"],
-                    "End": s_["end_date"],
-                    "Assignee": s_["assignee_email"] or "",
-                    "Progress%": pct,
+    # At-Risk / Hygiene
+    st.caption("At-Risk / Hygiene")
+    missing_dates = dfA.loc[~dfA["has_dates"], ["name","_type","assignee_email","status","progress"]] if not dfA.empty else pd.DataFrame(columns=["name","_type","assignee_email","status","progress"])
+    if not missing_dates.empty:
+        st.warning("Items missing start or end dates:")
+        st.data_editor(
+            missing_dates.rename(columns={"name":"Item","_type":"Type","assignee_email":"Assignee","status":"Status","progress":"Progress%"}).reset_index(drop=True),
+            width="stretch", hide_index=True, disabled=True,
+            column_config={"Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%")}
+        )
+
+    overdue_df = dfA.loc[dfA["is_overdue"], ["name","_type","assignee_email","status","end_date","progress"]].sort_values("end_date") if not dfA.empty else pd.DataFrame(columns=["name","_type","assignee_email","status","end_date","progress"])
+    if not overdue_df.empty:
+        st.error("Overdue items:")
+        st.data_editor(
+            overdue_df.rename(columns={"name":"Item","_type":"Type","assignee_email":"Assignee","status":"Status","end_date":"Due","progress":"Progress%"}).reset_index(drop=True),
+            width="stretch", hide_index=True, disabled=True,
+            column_config={"Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%")}
+        )
+
+    # Optional: keep Gantt in an expander
+    with st.expander("Timeline (Gantt)"):
+        rowsT = []
+        for t in tasks_raw:
+            if t["start_date"] and t["end_date"]:
+                rowsT.append({
+                    "Item": f"Task · {t['name']}",
+                    "Start": t["start_date"],
+                    "Finish": t["end_date"],
+                    "Status": _norm_status(t["status"]),
+                    "Assignee": t["assignee_email"],
+                    "Progress": round(float(t["progress"] or 0), 1)
                 })
-                ids_for_rows_s.append(s_["id"])
-
-            df_subs = pd.DataFrame(rows_s, columns=sub_cols)
-            order_s = df_subs.sort_values(by="Start", ascending=True, na_position="last").index.tolist()
-            df_subs_sorted = df_subs.iloc[order_s].reset_index(drop=True)
-            ids_sorted_s = [ids_for_rows_s[i] for i in order_s]
-            sub_row_id_map = _build_row_id_map(df_subs_sorted, ids_sorted_s)
-
-            st.session_state[f"sub_row_id_map_{picked_task_id}"] = sub_row_id_map
-            st.session_state[f"sub_orig_ids_{picked_task_id}"] = set([i for i in ids_sorted_s if i is not None])
-
-            edited_subs = st.data_editor(
-                df_subs_sorted,
-                width="stretch",
-                hide_index=True,
-                num_rows="dynamic",
-                disabled=not CAN_WRITE,
-                column_order=sub_cols,
-                column_config={
-                    "Subtask": st.column_config.TextColumn("Subtask", required=True),
-                    "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS),
-                    "Start": st.column_config.DateColumn("Start"),
-                    "End": st.column_config.DateColumn("End"),
-                    "Assignee": st.column_config.TextColumn("Assignee"),
-                    "Progress%": st.column_config.NumberColumn("Progress %", min_value=0, max_value=100, step=1, format="%d%%"),
-                },
+            if include_subtasks:
+                for s in db.get_subtasks_for_task(t["id"]):
+                    sdict = _to_subtask_dict(s)
+                    if sdict["start_date"] and sdict["end_date"]:
+                        rowsT.append({
+                            "Item": f"Subtask · {sdict['name']}",
+                            "Start": sdict["start_date"],
+                            "Finish": sdict["end_date"],
+                            "Status": _norm_status(sdict["status"]),
+                            "Assignee": sdict["assignee_email"],
+                            "Progress": round(float(sdict["progress"] or 0), 1)
+                        })
+        if rowsT:
+            dfT = pd.DataFrame(rowsT)
+            status_colors = {"To-Do":"#9CA3AF","In Progress":"#2563EB","Done":"#10B981"}
+            dfT["Status"] = pd.Categorical(dfT["Status"], categories=list(status_colors.keys()), ordered=True)
+            fig = px.timeline(
+                dfT, x_start="Start", x_end="Finish", y="Item",
+                color="Status", hover_data=["Status","Assignee","Progress"],
+                color_discrete_map=status_colors,
             )
-
-            if CAN_WRITE and st.button("💾 Save subtask changes"):
-                try:
-                    edited_df = edited_subs.copy()
-                    row_map = st.session_state.get(f"sub_row_id_map_{picked_task_id}", {})
-                    orig_ids = st.session_state.get(f"sub_orig_ids_{picked_task_id}", set())
-
-                    edited_row_indices = set(int(i) for i in edited_df.index)
-                    all_row_indices = set(row_map.keys())
-                    removed_rows = all_row_indices - edited_row_indices
-                    for r in removed_rows:
-                        del_id = row_map.get(r)
-                        if del_id in orig_ids:
-                            db.delete_subtask(int(del_id))
-
-                    for row_idx, row in edited_df.iterrows():
-                        name = str(row.get("Subtask", "")).strip()
-                        if not name:
-                            continue
-                        status = _norm_status(row.get("Status", "To-Do"))
-                        start = parse_date(row.get("Start"))
-                        end   = parse_date(row.get("End"))
-                        assg  = (str(row.get("Assignee", "")).strip() or None)
-                        try:
-                            prog = float(row.get("Progress%", 0) or 0)
-                        except Exception:
-                            prog = 0.0
-                        prog = float(max(0, min(100, prog)))
-
-                        maybe_id = _resolve_row_to_id(row_idx, row_map)
-                        db.add_or_update_subtask(
-                            task_id=picked_task_id,
-                            name=name,
-                            status=status if status in STATUS_OPTIONS else "To-Do",
-                            start=start,
-                            end=end,
-                            assignee_email=assg,
-                            subtask_id=int(maybe_id) if (maybe_id in orig_ids) else None,
-                            progress=prog,
-                        )
-
-                    st.success("Subtasks saved.")
-                    force_rerun()
-                except Exception as e:
-                    st.error(f"Save failed: {e}")
-
-            st.caption("Import subtasks from CSV (Subtask, Status, Start, End, Assignee, Progress%)")
-            up_sub = st.file_uploader(" ", type=["csv"], accept_multiple_files=False,
-                                      key=f"sub_csv_import_{picked_task_id}", label_visibility="collapsed")
-            if up_sub is not None and CAN_WRITE:
-                try:
-                    imp = pd.read_csv(up_sub)
-                    created = 0
-                    for _, r in imp.iterrows():
-                        name = str(r.get("Subtask", "")).strip()
-                        if not name:
-                            continue
-                        status = _norm_status(r.get("Status", "To-Do"))
-                        start = parse_date(r.get("Start"))
-                        end   = parse_date(r.get("End"))
-                        assg  = str(r.get("Assignee", "")).strip() or None
-                        try:
-                            prog = float(r.get("Progress%", 0) or 0)
-                        except Exception:
-                            prog = 0.0
-                        prog = float(max(0, min(100, prog)))
-                        db.add_or_update_subtask(
-                            task_id=picked_task_id,
-                            name=name,
-                            status=status if status in STATUS_OPTIONS else "To-Do",
-                            start=start,
-                            end=end,
-                            assignee_email=assg,
-                            subtask_id=None,
-                            progress=prog,
-                        )
-                        created += 1
-                    st.success(f"Imported {created} subtask(s).")
-                    force_rerun()
-                except Exception as e:
-                    st.error(f"Import failed: {e}")
-
-# ---------- Gantt Tab ----------
-with tab2:
-    st.subheader("Timeline (Gantt)")
-    tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
-    rows = []
-    for t in tasks:
-        if t["start_date"] and t["end_date"]:
-            rows.append({
-                "Item": f"Task · {t['name']}",
-                "Start": t["start_date"],
-                "Finish": t["end_date"],
-                "Status": _norm_status(t["status"]),
-                "Assignee": t["assignee_email"],
-                "Progress": round(t["progress"], 1)
-            })
-        subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
-        for s in subs:
-            if s["start_date"] and s["end_date"]:
-                rows.append({
-                    "Item": f"Subtask · {s['name']}",
-                    "Start": s["start_date"],
-                    "Finish": s["end_date"],
-                    "Status": _norm_status(s["status"]),
-                    "Assignee": s["assignee_email"],
-                    "Progress": round(s["progress"], 1)
-                })
-    if not rows:
-        st.info("Add start/end dates to tasks or subtasks to see them on the Gantt.")
-    else:
-        df = pd.DataFrame(rows)
-        status_colors = {
-            "To-Do":       "#9CA3AF",
-            "In Progress": "#2563EB",
-            "Done":        "#10B981",
-        }
-        df["Status"] = pd.Categorical(df["Status"], categories=list(status_colors.keys()), ordered=True)
-        fig = px.timeline(
-            df, x_start="Start", x_end="Finish", y="Item",
-            color="Status", hover_data=["Status", "Assignee", "Progress"],
-            color_discrete_map=status_colors,
-        )
-        fig.update_layout(margin=dict(l=20, r=20, t=30, b=30), legend_title_text="Status")
-        # plotly_chart doesn't support width='stretch'; leaving as-is for responsiveness
-        st.plotly_chart(fig, use_container_width=True, config={"displaylogo": False, "responsive": True})
+            fig.update_layout(margin=dict(l=20,r=20,t=30,b=30), legend_title_text="Status")
+            st.plotly_chart(fig, use_container_width=True, config={"displaylogo": False, "responsive": True})
+        else:
+            st.info("Add start/end dates to items to see them on the timeline.")
 
 # ---------- Members Tab ----------
 with tab3:
