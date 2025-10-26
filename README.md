@@ -34,7 +34,7 @@
        alt="Strivio logo" width="330" height="330" />
 </p>
 
-# Strivio — Project Manager
+# Strivio - Project Manager
 
 **Strivio-PM** is a free, Streamlit-powered project manager for solo builders, students, and small teams. Create projects, manage tasks/subtasks **directly in editable tables**, and explore a **Project Analytics** view (timeline + status barcharts + workload) to stay on track. Ships with SQLite by default and can run on Postgres/Supabase via `DATABASE_URL`.
 
