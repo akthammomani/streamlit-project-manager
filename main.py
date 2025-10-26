@@ -662,7 +662,7 @@ with tab2:
         st.plotly_chart(fig_tl, use_container_width=True, config={"displaylogo": False, "responsive": True})
     else:
         st.info("Add start/end dates to items to see them on the timeline.")
-   st.markdown("---")
+    st.markdown("---")
    # ---- Status & Assignee Breakdown (side-by-side, single titles) ----
     st.markdown("### Status & Assignee Breakdown")
     
