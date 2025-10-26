@@ -201,6 +201,33 @@ def full_screen_project_gate(user_email: str):
                 st.session_state["selected_project_id"] = pid
                 st.success("Project created.")
                 force_rerun()
+def render_contacts_sidebar():
+    with st.sidebar:
+        st.divider()
+        st.markdown("""
+        <style>
+          .contact-card {padding:10px 12px;border:1px solid #e5e7eb;border-radius:14px;background:#f9fafb;}
+          .contact-title {font-weight:700;margin-bottom:8px;color:#111827;}
+          .contact-grid {display:flex;flex-wrap:wrap;gap:8px;}
+          .contact-btn {
+            display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid #e5e7eb;
+            background:#ffffff;color:#111827;text-decoration:none;font-weight:600;font-size:13px;
+            box-shadow:0 1px 0 rgba(17,24,39,.04);transition:.15s ease;
+          }
+          .contact-btn:hover {transform:translateY(-1px);box-shadow:0 6px 16px rgba(31,41,55,.06);}
+        </style>
+        <div class="contact-card">
+          <div class="contact-title">Contacts</div>
+          <div class="contact-grid">
+            <a class="contact-btn" href="https://github.com/akthammomani" target="_blank">GitHub</a>
+            <a class="contact-btn" href="https://www.linkedin.com/in/akthammomani/" target="_blank">LinkedIn</a>
+            <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM</a>
+            <a class="contact-btn" href="mailto:aktham.momani81@gmail.com">Email</a>
+          </div>
+          <div style="margin-top:8px;"><span style="color:#6b7280;font-size:12px;">© Aktham Momani, 2025.</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+
 
 user = st.session_state.get("user")
 if not user:
@@ -267,29 +294,7 @@ with st.sidebar:
                 st.success("Project created.")
                 force_rerun()
 
-        st.markdown("""
-        <style>
-          .contact-card {padding:10px 12px;border:1px solid #e5e7eb;border-radius:14px;background:#f9fafb;}
-          .contact-title {font-weight:700;margin-bottom:8px;color:#111827;}
-          .contact-grid {display:flex;flex-wrap:wrap;gap:8px;}
-          .contact-btn {
-            display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid #e5e7eb;
-            background:#ffffff;color:#111827;text-decoration:none;font-weight:600;font-size:13px;
-            box-shadow:0 1px 0 rgba(17,24,39,.04);transition:.15s ease;
-          }
-          .contact-btn:hover {transform:translateY(-1px);box-shadow:0 6px 16px rgba(31,41,55,.06);}
-        </style>
-        <div class="contact-card">
-          <div class="contact-title">Contacts</div>
-          <div class="contact-grid">
-            <a class="contact-btn" href="https://github.com/akthammomani" target="_blank">GitHub</a>
-            <a class="contact-btn" href="https://www.linkedin.com/in/akthammomani/" target="_blank">LinkedIn</a>
-            <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM</a>
-            <a class="contact-btn" href="mailto:aktham.momani81@gmail.com">Email</a>
-          </div>
-          <div style="margin-top:8px;"><span style="color:#6b7280;font-size:12px;">© Aktham Momani, 2025.</span></div>
-        </div>
-            """, unsafe_allow_html=True)
+        
 
 st.title(current_project.name)
 st.caption(f"{current_project.start_date} → {current_project.end_date}")
@@ -305,6 +310,7 @@ if not getattr(current_project, "is_public", True) and not st.session_state.get(
                 force_rerun()
             else:
                 st.error("Incorrect PIN.")
+    render_contacts_sidebar()
     st.stop()
 
 # Roles
@@ -349,19 +355,7 @@ with st.sidebar.expander("Manage current project"):
                 force_rerun()
     else:
         st.caption("Only the owner can manage this project.")
-# --- Contacts (sidebar) ---
-with st.sidebar:
-    st.divider()
-    with st.expander("Contacts", expanded=False):
-        st.markdown("""
-        [![](https://img.shields.io/badge/GitHub-Follow-informational)](https://github.com/akthammomani)
-        [![](https://img.shields.io/badge/LinkedIn-Connect-informational)](https://www.linkedin.com/in/akthammomani/)
-        [![](https://img.shields.io/badge/Strivio-PM-informational)](https://github.com/akthammomani/strivio-pm)
-        [![](https://img.shields.io/badge/-aktham.momani81@gmail.com-c14438?style=flat-square&logo=Gmail&logoColor=white)](mailto:aktham.momani81@gmail.com)
-        """, unsafe_allow_html=True)
-        st.caption("© Aktham Momani, 2025. All rights reserved.")
-
-
+        render_contacts_sidebar()
 # ---------- Tabs ----------
 tab1, tab2, tab3 = st.tabs(["Tasks", "Project Analytics", "Members"])
 
