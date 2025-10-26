@@ -5,8 +5,6 @@ def force_rerun():
     fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
     if fn:
         fn()
-    else:
-        st.warning("Unable to rerun: your Streamlit version is too old.")
 
 import pandas as pd
 from datetime import date
@@ -15,24 +13,24 @@ import plotly.express as px
 import base64
 from pathlib import Path
 from PIL import Image
-import os
-
 import db
 
-# ------------------ App chrome ------------------
+# --- App chrome ---
 st.set_page_config(
     page_title="Strivio - Project Manager",
     page_icon="logo_1.png",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
+# center all st.image by default
 st.markdown("""
 <style>
-  [data-testid="stImage"] img { display:block; margin:auto; }
+  [data-testid="stImage"] img { display:block;margin-left:auto;margin-right:auto; }
 </style>
 """, unsafe_allow_html=True)
 
+# ---------- helpers ----------
 STATUS_OPTIONS = ["To-Do", "In Progress", "Done"]
 
 def parse_date(x):
@@ -56,13 +54,11 @@ def _norm_status(s: str) -> str:
     }
     return mapping.get(s, s.title())
 
-# ORM-safe shims
+# convert ORM rows to dicts that are UI-safe
 def _to_task_dict(t):
     if isinstance(t, dict):
         return t
-    assignee_email = None
-    if isinstance(getattr(t, "__dict__", {}), dict) and "assignee" in t.__dict__ and getattr(t.assignee, "email", None):
-        assignee_email = t.assignee.email
+    assignee_email = getattr(getattr(t, "assignee", None), "email", None)
     return {
         "id": getattr(t, "id", None),
         "name": getattr(t, "name", None),
@@ -76,9 +72,7 @@ def _to_task_dict(t):
 def _to_subtask_dict(s):
     if isinstance(s, dict):
         return s
-    assignee_email = None
-    if isinstance(getattr(s, "__dict__", {}), dict) and "assignee" in s.__dict__ and getattr(s.assignee, "email", None):
-        assignee_email = s.assignee.email
+    assignee_email = getattr(getattr(s, "assignee", None), "email", None)
     return {
         "id": getattr(s, "id", None),
         "name": getattr(s, "name", None),
@@ -96,24 +90,22 @@ def _init_db_once():
 
 _init_db_once()
 
-# ------------------ Centered login / project gate ------------------
 def centered_logo(path: str = "logo_1.png", width: int = 160) -> None:
     p = Path(path)
     if not p.is_file():
         p = Path(__file__).with_name(path)
     try:
         b64 = base64.b64encode(p.read_bytes()).decode("utf-8")
-        st.markdown(
-            f"<div style='text-align:center'><img src='data:image/png;base64,{b64}' style='width:{width}px;max-width:100%;height:auto;'/></div>",
-            unsafe_allow_html=True,
-        )
+        html = f'<div style="text-align:center;"><img src="data:image/png;base64,{b64}" style="width:{width}px;max-width:100%;height:auto;" /></div>'
+        st.markdown(html, unsafe_allow_html=True)
     except Exception:
         st.image(str(p), width=width)
 
+# ---------- Auth & project gate ----------
 def full_screen_login():
     st.markdown("""
     <style>
-      [data-testid="stSidebar"], [data-testid="baseButton-headerNoPadding"] { display:none !important; }
+      [data-testid="stSidebar"], [data-testid="baseButton-headerNoPadding"] { display:none!important; }
       .main > div { padding-top: 6vh !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -123,7 +115,7 @@ def full_screen_login():
         with st.form("login_form", clear_on_submit=False):
             email = st.text_input("Your email", placeholder="you@example.com")
             name  = st.text_input("Your name (optional)")
-            submitted = st.form_submit_button("Sign in / Continue", width='stretch')
+            submitted = st.form_submit_button("Sign in / Continue", use_container_width=True)
         if submitted:
             if not email:
                 st.warning("Please enter your email.")
@@ -134,7 +126,7 @@ def full_screen_login():
 def full_screen_project_gate(user_email: str):
     st.markdown("""
     <style>
-      [data-testid="stSidebar"], [data-testid="baseButton-headerNoPadding"] { display:none !important; }
+      [data-testid="stSidebar"], [data-testid="baseButton-headerNoPadding"] { display:none!important; }
       .main > div { padding-top: 4vh !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -143,23 +135,30 @@ def full_screen_project_gate(user_email: str):
     with col:
         centered_logo("logo_1.png", width=140)
         st.markdown("<h2 style='text-align:center;margin-top:8px;'>Choose or Create a Project</h2>", unsafe_allow_html=True)
+
         if projects:
             opt = st.selectbox("Open existing project", options=[f"{p.id} · {p.name}" for p in projects], key="center_open_select")
-            if st.button("Open project", width='stretch'):
+            if st.button("Open project", use_container_width=True):
                 sel_id = int(opt.split("·")[0].strip())
                 st.session_state["selected_project_id"] = sel_id
                 force_rerun()
+
         st.markdown("---")
         with st.form("center_new_project", clear_on_submit=True):
             p_name = st.text_input("Project name", placeholder="AI-Powered Apple Leaf Specialist")
             c1, c2 = st.columns(2)
-            with c1: p_start = st.date_input("Start", value=date.today(), key="center_p_start")
-            with c2: p_end   = st.date_input("End",   value=date.today(), key="center_p_end")
+            with c1:
+                p_start = st.date_input("Start", value=date.today(), key="center_p_start")
+            with c2:
+                p_end = st.date_input("End", value=date.today(), key="center_p_end")
             c3, c4 = st.columns(2)
-            with c3: is_public = st.checkbox("Public project (no PIN required)", value=False, key="center_public")
-            with c4: pin_val   = st.text_input("Project PIN", type="password", disabled=is_public, key="center_pin")
+            with c3:
+                is_public = st.checkbox("Public project (no PIN required)", value=False, key="center_public")
+            with c4:
+                pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="center_pin")
             members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="center_members")
-            submit_new = st.form_submit_button("Create project", width='stretch')
+            submit_new = st.form_submit_button("Create project", use_container_width=True)
+
         if submit_new:
             if not p_name:
                 st.warning("Please enter a project name.")
@@ -174,25 +173,23 @@ def full_screen_project_gate(user_email: str):
                 st.success(f"Project created (id {pid}).")
                 force_rerun()
 
-# Login gate
 user = st.session_state.get("user")
 if not user:
     full_screen_login()
     st.stop()
 
-# Project gate
 if not st.session_state.get("selected_project_id"):
     full_screen_project_gate(user["email"])
     st.stop()
 
-# ------------------ Sidebar after login ------------------
 def load_logo(path="logo_1.png"):
     return Image.open(path)
 
 with st.sidebar:
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1,3,1])
-    with c2: st.image(load_logo(), width='stretch')
+    c1, c2, c3 = st.columns([1, 3, 1])
+    with c2:
+        st.image(load_logo(), use_container_width=True)
     st.caption(f"Signed in as **{user['email']}**")
     st.markdown("---")
 
@@ -207,7 +204,7 @@ with st.sidebar:
     proj_names = [f"{p.id} · {p.name}" for p in _projects_raw]
     try:
         default_label = f"{current_project.id} · {current_project.name}"
-        idx = 0 if not proj_names else max(0, proj_names.index(default_label))
+        idx = max(0, proj_names.index(default_label))
     except ValueError:
         idx = 0
     chosen = st.selectbox("Open project", options=proj_names, index=idx, key="sidebar_project_select")
@@ -216,10 +213,38 @@ with st.sidebar:
         st.session_state["selected_project_id"] = chosen_id
         force_rerun()
 
+    with st.expander("New project"):
+        p_name = st.text_input("Project name", placeholder="AI-Powered Apple Leaf Specialist", key="sb_p_name")
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            p_start = st.date_input("Start", value=date.today(), key="sb_p_start")
+        with col_p2:
+            p_end = st.date_input("End", value=date.today(), key="sb_p_end")
+        colx1, colx2 = st.columns(2)
+        with colx1:
+            is_public = st.checkbox("Public project (no PIN required)", value=False, key="sb_public")
+        with colx2:
+            pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="sb_pin",
+                                    help="Members will need this PIN to open the project.")
+        members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="sb_members")
+        if st.button("Create project", use_container_width=True, key="sb_create"):
+            if not p_name:
+                st.warning("Please enter a project name.")
+            elif p_end < p_start:
+                st.warning("End date must be after start date.")
+            elif not is_public and not pin_val:
+                st.warning("Private projects require a PIN.")
+            else:
+                members = [m.strip() for m in members_csv.split(",") if m.strip()]
+                pid = db.create_project(user["email"], p_name, p_start, p_end, members, is_public=is_public, pin=(pin_val or None))
+                st.session_state["selected_project_id"] = pid
+                st.success(f"Project created (id {pid}).")
+                force_rerun()
+
 st.title(current_project.name)
 st.caption(f"{current_project.start_date} → {current_project.end_date}")
 
-# PIN
+# PIN gate
 pin_key = f"pin_ok_{current_project.id}"
 if not getattr(current_project, "is_public", True) and not st.session_state.get(pin_key):
     with st.sidebar.expander("🔒 Enter project PIN to view"):
@@ -244,54 +269,211 @@ with st.sidebar.expander("Manage current project"):
         with colA:
             if st.button("Save name", key="save_project_name"):
                 db.rename_project(current_project.id, new_name)
-                st.success("Project renamed."); force_rerun()
+                st.success("Project renamed.")
+                force_rerun()
         with colB:
             if st.button("Delete project", type="secondary", key="delete_project_btn"):
                 db.delete_project(current_project.id)
+                st.success("Project deleted.")
                 st.session_state["selected_project_id"] = None
-                st.success("Project deleted."); force_rerun()
+                force_rerun()
     else:
         st.caption("Only the owner can manage this project.")
 
-# ------------------ Tabs ------------------
+# ---------- Tabs ----------
 tab1, tab2, tab3 = st.tabs(["Tasks", "Gantt", "Members"])
 
-# ------------------ TASKS (inline editing) ------------------
+# =======================
+# Tasks Tab (inline edit)
+# =======================
 with tab1:
     st.subheader("Tasks")
+    if not CAN_WRITE:
+        st.info("You have read-only access to this project.")
 
-    # Get tasks (as dicts) and prepare editable DataFrame (index = id, hidden)
     raw_tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
-    # sort by start date (None last)
-    raw_tasks.sort(key=lambda x: (x["start_date"] is None, x["start_date"]))
 
-    if not raw_tasks and not CAN_WRITE:
-        st.info("No tasks yet.")
+    # Build the editable DataFrame (keep columns even when empty!)
+    task_cols = ["Task", "Status", "Start", "End", "Assignee", "Progress%", "Description"]
+    task_records = []
+    for t in raw_tasks:
+        task_records.append({
+            "Task": t["name"] or "",
+            "Status": _norm_status(t["status"]) if t["status"] else "To-Do",
+            "Start": t["start_date"],
+            "End": t["end_date"],
+            "Assignee": t["assignee_email"] or "",
+            "Progress%": float(round(t["progress"] or 0, 1)),
+            "Description": "",
+        })
+
+    if task_records:
+        df_tasks = pd.DataFrame(task_records, columns=task_cols, index=[t["id"] for t in raw_tasks])
+        df_tasks.index.name = "id"          # keep ids (hidden) to detect edits/deletes
     else:
-        cols = ["Task","Status","Start","End","Assignee","Progress%","Description"]
-        records = []
-        for t in raw_tasks:
-            records.append({
-                "Task": t["name"] or "",
-                "Status": _norm_status(t["status"]) if t["status"] else "To-Do",
-                "Start": t["start_date"],
-                "End": t["end_date"],
-                "Assignee": t["assignee_email"] or "",
-                "Progress%": float(round(t["progress"] or 0, 1)),
-                "Description": "",  # you can persist this if you add to DB
-            })
+        df_tasks = pd.DataFrame(columns=task_cols)  # enables “Add row” when empty
 
-        df_tasks = pd.DataFrame(records, index=[t["id"] for t in raw_tasks])
-        df_tasks.index.name = "id"
+    edited_tasks = st.data_editor(
+        df_tasks.sort_values(by="Start", ascending=True, na_position="last"),
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",
+        disabled=not CAN_WRITE,
+        column_config={
+            "Task": st.column_config.TextColumn("Task", required=True),
+            "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS),
+            "Start": st.column_config.DateColumn("Start"),
+            "End": st.column_config.DateColumn("End"),
+            "Assignee": st.column_config.TextColumn("Assignee"),
+            "Progress%": st.column_config.ProgressColumn(
+                "Progress", format="%d%%", min_value=0, max_value=100
+            ),
+            "Description": st.column_config.TextColumn("Description", help="Optional notes"),
+        },
+    )
 
-        if CAN_WRITE:
-            edited = st.data_editor(
-                df_tasks,
-                num_rows="dynamic",
+    # Save button for tasks
+    if CAN_WRITE and st.button("💾 Save task changes"):
+        try:
+            orig_ids = {t["id"] for t in raw_tasks if t["id"] is not None}
+            edited_df = edited_tasks.copy()
+
+            # Deletions: ids that existed but no longer present in edited_df index
+            edited_ids = set()
+            if edited_df.index.name == "id":
+                # If we still have id-based index
+                edited_ids = {i for i in edited_df.index if isinstance(i, int)}
+                to_delete = orig_ids - edited_ids
+            else:
+                # No id index (e.g., started empty), nothing to delete
+                to_delete = set()
+
+            for del_id in to_delete:
+                db.delete_task(int(del_id))
+
+            # Upserts (create/update)
+            # If index has ids, iterate preserving index; else treat all rows as new
+            if edited_df.index.name == "id":
+                iterable = edited_df.iterrows()
+            else:
+                iterable = [(None, row) for _, row in edited_df.iterrows()]
+
+            for maybe_id, row in iterable:
+                name = str(row.get("Task", "")).strip()
+                if not name:
+                    continue
+                status = _norm_status(row.get("Status", "To-Do"))
+                start = parse_date(row.get("Start"))
+                end   = parse_date(row.get("End"))
+                assg  = (str(row.get("Assignee", "")).strip() or None)
+                try:
+                    prog = float(row.get("Progress%", 0) or 0)
+                except Exception:
+                    prog = 0.0
+                desc  = str(row.get("Description", "")).strip() or None
+
+                db.add_or_update_task(
+                    project_id=current_project.id,
+                    name=name,
+                    status=status if status in STATUS_OPTIONS else "To-Do",
+                    start=start,
+                    end=end,
+                    assignee_email=assg,
+                    description=desc,
+                    task_id=int(maybe_id) if (maybe_id in orig_ids) else None,
+                    progress=float(max(0, min(100, prog))),
+                )
+
+            st.success("Tasks saved.")
+            force_rerun()
+        except Exception as e:
+            st.error(f"Save failed: {e}")
+
+    # CSV import (only extra control kept)
+    st.caption("Import tasks from CSV (Task, Status, Start, End, Assignee, Progress%, Description)")
+    up = st.file_uploader(" ", type=["csv"], accept_multiple_files=False, key="task_csv_import", label_visibility="collapsed")
+    if up is not None and CAN_WRITE:
+        try:
+            imp = pd.read_csv(up)
+            created = 0
+            for _, r in imp.iterrows():
+                name = str(r.get("Task", "")).strip()
+                if not name:
+                    continue
+                status = _norm_status(r.get("Status", "To-Do"))
+                start = parse_date(r.get("Start"))
+                end   = parse_date(r.get("End"))
+                assg  = str(r.get("Assignee", "")).strip() or None
+                try:
+                    prog = float(r.get("Progress%", 0) or 0)
+                except Exception:
+                    prog = 0.0
+                desc  = str(r.get("Description", "")).strip() or None
+                db.add_or_update_task(
+                    project_id=current_project.id,
+                    name=name,
+                    status=status if status in STATUS_OPTIONS else "To-Do",
+                    start=start,
+                    end=end,
+                    assignee_email=assg,
+                    description=desc,
+                    task_id=None,
+                    progress=float(max(0, min(100, prog))),
+                )
+                created += 1
+            st.success(f"Imported {created} task(s).")
+            force_rerun()
+        except Exception as e:
+            st.error(f"Import failed: {e}")
+
+    st.markdown("---")
+
+    # =========================
+    # Subtasks inline editor
+    # =========================
+    st.subheader("Subtasks")
+
+    # Need a task context to edit subtasks
+    all_tasks_for_picker = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
+    if not all_tasks_for_picker:
+        st.caption("Create a task first to add subtasks.")
+    else:
+        task_for_sub = st.selectbox(
+            "Task",
+            options=[f"{t['id']} · {t['name']}" for t in all_tasks_for_picker],
+            key="task_picker_for_subtasks",
+        )
+
+        if task_for_sub:
+            picked_task_id = int(task_for_sub.split("·")[0].strip())
+            raw_subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(picked_task_id)]
+
+            sub_cols = ["Subtask","Status","Start","End","Assignee","Progress%"]
+            sub_records = []
+            for s_ in raw_subs:
+                sub_records.append({
+                    "Subtask": s_["name"] or "",
+                    "Status": _norm_status(s_["status"]) if s_["status"] else "To-Do",
+                    "Start": s_["start_date"],
+                    "End": s_["end_date"],
+                    "Assignee": s_["assignee_email"] or "",
+                    "Progress%": float(round(s_["progress"] or 0, 1)),
+                })
+
+            if sub_records:
+                df_subs = pd.DataFrame(sub_records, columns=sub_cols, index=[s["id"] for s in raw_subs])
+                df_subs.index.name = "id"
+            else:
+                df_subs = pd.DataFrame(columns=sub_cols)
+
+            edited_subs = st.data_editor(
+                df_subs.sort_values(by="Start", ascending=True, na_position="last"),
                 use_container_width=True,
-                hide_index=True,  # hide id from UI
+                hide_index=True,
+                num_rows="dynamic",
+                disabled=not CAN_WRITE,
                 column_config={
-                    "Task": st.column_config.TextColumn("Task", required=True),
+                    "Subtask": st.column_config.TextColumn("Subtask", required=True),
                     "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS),
                     "Start": st.column_config.DateColumn("Start"),
                     "End": st.column_config.DateColumn("End"),
@@ -299,249 +481,85 @@ with tab1:
                     "Progress%": st.column_config.ProgressColumn(
                         "Progress", format="%d%%", min_value=0, max_value=100
                     ),
-                    "Description": st.column_config.TextColumn("Description", help="Optional"),
                 },
-                column_order=cols,
-                key="tasks_editor",
             )
 
-            # Save changes button
-            if st.button("💾 Save task changes", width="stretch"):
+            if CAN_WRITE and st.button("💾 Save subtask changes"):
                 try:
-                    before_ids = set(df_tasks.index.astype("Int64").tolist())
-                    after_ids  = set(edited.index.astype("Int64").tolist())
+                    orig_ids = {s["id"] for s in raw_subs if s["id"] is not None}
+                    edited_df = edited_subs.copy()
 
-                    # Deleted rows
-                    for removed_id in [i for i in before_ids if i not in after_ids and pd.notna(i)]:
-                        db.delete_task(int(removed_id))
+                    if edited_df.index.name == "id":
+                        edited_ids = {i for i in edited_df.index if isinstance(i, int)}
+                        to_delete = orig_ids - edited_ids
+                    else:
+                        to_delete = set()
 
-                    # Updated rows (existing id present & any difference)
-                    inter = [i for i in before_ids.intersection(after_ids) if pd.notna(i)]
-                    for i in inter:
-                        orig = df_tasks.loc[i]
-                        new  = edited.loc[i]
-                        if not orig.equals(new):
-                            name = str(new["Task"]).strip()
-                            status = _norm_status(new["Status"])
-                            start  = parse_date(new["Start"])
-                            end    = parse_date(new["End"])
-                            assg   = str(new["Assignee"]).strip() or None
-                            prog   = float(new["Progress%"] or 0)
-                            db.add_or_update_task(
-                                project_id=current_project.id,
-                                name=name,
-                                status=status if status in STATUS_OPTIONS else "To-Do",
-                                start=start, end=end,
-                                assignee_email=assg,
-                                description=str(new.get("Description","")).strip() or None,
-                                task_id=int(i),
-                                progress=float(max(0, min(100, prog))),
-                            )
+                    for del_id in to_delete:
+                        db.delete_subtask(int(del_id))
 
-                    # Added rows (id is NaN)
-                    new_rows = edited.loc[edited.index.isna()] if edited.index.hasnans else pd.DataFrame(columns=cols)
-                    for _, r in new_rows.iterrows():
-                        name = str(r["Task"]).strip()
+                    if edited_df.index.name == "id":
+                        iterable = edited_df.iterrows()
+                    else:
+                        iterable = [(None, row) for _, row in edited_df.iterrows()]
+
+                    for maybe_id, row in iterable:
+                        name = str(row.get("Subtask", "")).strip()
                         if not name:
                             continue
-                        status = _norm_status(r["Status"])
-                        start  = parse_date(r["Start"])
-                        end    = parse_date(r["End"])
-                        assg   = str(r["Assignee"]).strip() or None
-                        prog   = float(r["Progress%"] or 0)
-                        db.add_or_update_task(
-                            project_id=current_project.id,
-                            name=name,
-                            status=status if status in STATUS_OPTIONS else "To-Do",
-                            start=start, end=end,
-                            assignee_email=assg,
-                            description=str(r.get("Description","")).strip() or None,
-                            task_id=None,
-                            progress=float(max(0, min(100, prog))),
-                        )
-
-                    st.success("Tasks saved.")
-                    force_rerun()
-                except Exception as e:
-                    st.error(f"Failed to save tasks: {e}")
-
-            # Import CSV only (no download / no delete buttons)
-            up = st.file_uploader(
-                "Import tasks from CSV (Task, Status, Start, End, Assignee, Progress%, Description)",
-                type=["csv"], key="tasks_csv_import"
-            )
-            if up is not None:
-                try:
-                    imp = pd.read_csv(up)
-                    created = 0
-                    for _, r in imp.iterrows():
-                        name = str(r.get("Task","")).strip()
-                        if not name:
-                            continue
-                        status = _norm_status(r.get("Status","To-Do"))
-                        start  = parse_date(r.get("Start"))
-                        end    = parse_date(r.get("End"))
-                        assg   = str(r.get("Assignee","")).strip() or None
+                        status = _norm_status(row.get("Status", "To-Do"))
+                        start = parse_date(row.get("Start"))
+                        end   = parse_date(row.get("End"))
+                        assg  = (str(row.get("Assignee", "")).strip() or None)
                         try:
-                            prog = float(r.get("Progress%", 0) or 0)
+                            prog = float(row.get("Progress%", 0) or 0)
                         except Exception:
                             prog = 0.0
-                        desc = str(r.get("Description","")).strip() or None
-                        db.add_or_update_task(
-                            project_id=current_project.id,
-                            name=name, status=status if status in STATUS_OPTIONS else "To-Do",
-                            start=start, end=end, assignee_email=assg,
-                            description=desc, task_id=None,
-                            progress=float(max(0, min(100, prog))),
-                        )
-                        created += 1
-                    st.success(f"Imported {created} task(s).")
-                    force_rerun()
-                except Exception as e:
-                    st.error(f"Import failed: {e}")
 
-        else:
-            st.dataframe(
-                df_tasks,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Progress%": st.column_config.ProgressColumn("Progress", format="%d%%", min_value=0, max_value=100)
-                },
-                column_order=cols,
-            )
-
-    st.markdown("---")
-    # ------------------ SUBTASKS (inline editing) ------------------
-    st.subheader("Subtasks")
-
-    # choose a task for subtasks view
-    tasks_for_select = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
-    if not tasks_for_select:
-        st.caption("Create a task first to add subtasks.")
-    else:
-        # Sort by Start for the picker, too
-        tasks_for_select.sort(key=lambda x: (x["start_date"] is None, x["start_date"]))
-        pick = st.selectbox("Task", [f"{t['id']} · {t['name']}" for t in tasks_for_select], key="subtask_task_picker")
-        picked_task_id = int(pick.split("·")[0].strip())
-
-        raw_subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(picked_task_id)]
-        raw_subs.sort(key=lambda x: (x["start_date"] is None, x["start_date"]))
-
-        cols_sub = ["Subtask","Status","Start","End","Assignee","Progress%"]
-        records_sub = []
-        for s_ in raw_subs:
-            records_sub.append({
-                "Subtask": s_["name"] or "",
-                "Status": _norm_status(s_["status"]) if s_["status"] else "To-Do",
-                "Start": s_["start_date"],
-                "End": s_["end_date"],
-                "Assignee": s_["assignee_email"] or "",
-                "Progress%": float(round(s_["progress"] or 0, 1)),
-            })
-        df_subs = pd.DataFrame(records_sub, index=[s["id"] for s in raw_subs])
-        df_subs.index.name = "id"
-
-        if CAN_WRITE:
-            edited_subs = st.data_editor(
-                df_subs,
-                num_rows="dynamic",
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Subtask": st.column_config.TextColumn("Subtask", required=True),
-                    "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS),
-                    "Start": st.column_config.DateColumn("Start"),
-                    "End": st.column_config.DateColumn("End"),
-                    "Assignee": st.column_config.TextColumn("Assignee"),
-                    "Progress%": st.column_config.ProgressColumn("Progress", format="%d%%", min_value=0, max_value=100),
-                },
-                column_order=cols_sub,
-                key=f"subs_editor_{picked_task_id}",
-            )
-
-            if st.button("💾 Save subtask changes", width="stretch", key=f"save_subs_{picked_task_id}"):
-                try:
-                    b_ids = set(df_subs.index.astype("Int64").tolist())
-                    a_ids = set(edited_subs.index.astype("Int64").tolist())
-
-                    # Deleted
-                    for removed_id in [i for i in b_ids if i not in a_ids and pd.notna(i)]:
-                        db.delete_subtask(int(removed_id))
-
-                    # Updated
-                    inter = [i for i in b_ids.intersection(a_ids) if pd.notna(i)]
-                    for i in inter:
-                        orig = df_subs.loc[i]
-                        new  = edited_subs.loc[i]
-                        if not orig.equals(new):
-                            name = str(new["Subtask"]).strip()
-                            status = _norm_status(new["Status"])
-                            start  = parse_date(new["Start"])
-                            end    = parse_date(new["End"])
-                            assg   = str(new["Assignee"]).strip() or None
-                            prog   = float(new["Progress%"] or 0)
-                            db.add_or_update_subtask(
-                                task_id=picked_task_id,
-                                name=name,
-                                status=status if status in STATUS_OPTIONS else "To-Do",
-                                start=start, end=end,
-                                assignee_email=assg,
-                                subtask_id=int(i),
-                                progress=float(max(0, min(100, prog))),
-                            )
-
-                    # Added
-                    new_rows = edited_subs.loc[edited_subs.index.isna()] if edited_subs.index.hasnans else pd.DataFrame(columns=cols_sub)
-                    for _, r in new_rows.iterrows():
-                        name = str(r["Subtask"]).strip()
-                        if not name:
-                            continue
-                        status = _norm_status(r["Status"])
-                        start  = parse_date(r["Start"])
-                        end    = parse_date(r["End"])
-                        assg   = str(r["Assignee"]).strip() or None
-                        prog   = float(r["Progress%"] or 0)
                         db.add_or_update_subtask(
                             task_id=picked_task_id,
                             name=name,
                             status=status if status in STATUS_OPTIONS else "To-Do",
-                            start=start, end=end,
+                            start=start,
+                            end=end,
                             assignee_email=assg,
-                            subtask_id=None,
+                            subtask_id=int(maybe_id) if (maybe_id in orig_ids) else None,
                             progress=float(max(0, min(100, prog))),
                         )
 
                     st.success("Subtasks saved.")
                     force_rerun()
                 except Exception as e:
-                    st.error(f"Failed to save subtasks: {e}")
+                    st.error(f"Save failed: {e}")
 
-            up_sub = st.file_uploader(
-                "Import subtasks from CSV for selected task (Subtask, Status, Start, End, Assignee, Progress%)",
-                type=["csv"], key=f"subs_csv_{picked_task_id}"
-            )
-            if up_sub is not None:
+            st.caption("Import subtasks from CSV (Subtask, Status, Start, End, Assignee, Progress%)")
+            up_sub = st.file_uploader(" ", type=["csv"], accept_multiple_files=False,
+                                      key=f"sub_csv_import_{picked_task_id}", label_visibility="collapsed")
+            if up_sub is not None and CAN_WRITE:
                 try:
                     imp = pd.read_csv(up_sub)
                     created = 0
                     for _, r in imp.iterrows():
-                        name = str(r.get("Subtask","")).strip()
+                        name = str(r.get("Subtask", "")).strip()
                         if not name:
                             continue
-                        status = _norm_status(r.get("Status","To-Do"))
-                        start  = parse_date(r.get("Start"))
-                        end    = parse_date(r.get("End"))
-                        assg   = str(r.get("Assignee","")).strip() or None
+                        status = _norm_status(r.get("Status", "To-Do"))
+                        start = parse_date(r.get("Start"))
+                        end   = parse_date(r.get("End"))
+                        assg  = str(r.get("Assignee", "")).strip() or None
                         try:
                             prog = float(r.get("Progress%", 0) or 0)
                         except Exception:
                             prog = 0.0
                         db.add_or_update_subtask(
                             task_id=picked_task_id,
-                            name=name, status=status if status in STATUS_OPTIONS else "To-Do",
-                            start=start, end=end, assignee_email=assg,
-                            subtask_id=None, progress=float(max(0, min(100, prog))),
+                            name=name,
+                            status=status if status in STATUS_OPTIONS else "To-Do",
+                            start=start,
+                            end=end,
+                            assignee_email=assg,
+                            subtask_id=None,
+                            progress=float(max(0, min(100, prog))),
                         )
                         created += 1
                     st.success(f"Imported {created} subtask(s).")
@@ -549,18 +567,7 @@ with tab1:
                 except Exception as e:
                     st.error(f"Import failed: {e}")
 
-        else:
-            st.dataframe(
-                df_subs,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Progress%": st.column_config.ProgressColumn("Progress", format="%d%%", min_value=0, max_value=100)
-                },
-                column_order=cols_sub,
-            )
-
-# ------------------ GANTT ------------------
+# ---------- Gantt Tab ----------
 with tab2:
     st.subheader("Timeline (Gantt)")
     tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
@@ -569,40 +576,42 @@ with tab2:
         if t["start_date"] and t["end_date"]:
             rows.append({
                 "Item": f"Task · {t['name']}",
-                "Start": t["start_date"], "Finish": t["end_date"],
-                "Status": _norm_status(t["status"]), "Assignee": t["assignee_email"],
-                "Progress": round(t["progress"] or 0, 1),
+                "Start": t["start_date"],
+                "Finish": t["end_date"],
+                "Status": _norm_status(t["status"]),
+                "Assignee": t["assignee_email"],
+                "Progress": round(t["progress"], 1)
             })
         subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
         for s in subs:
             if s["start_date"] and s["end_date"]:
                 rows.append({
                     "Item": f"Subtask · {s['name']}",
-                    "Start": s["start_date"], "Finish": s["end_date"],
-                    "Status": _norm_status(s["status"]), "Assignee": s["assignee_email"],
-                    "Progress": round(s["progress"] or 0, 1),
+                    "Start": s["start_date"],
+                    "Finish": s["end_date"],
+                    "Status": _norm_status(s["status"]),
+                    "Assignee": s["assignee_email"],
+                    "Progress": round(s["progress"], 1)
                 })
     if not rows:
         st.info("Add start/end dates to tasks or subtasks to see them on the Gantt.")
     else:
         df = pd.DataFrame(rows)
-        df["Status"] = df["Status"].replace({
-            "In-Progress": "In Progress", "in-pogress": "In Progress",
-            "todo": "To-Do", "to do": "To-Do", "done": "Done"
-        })
         status_colors = {
-            "To-Do": "#9CA3AF", "In Progress": "#2563EB", "Done": "#10B981"
+            "To-Do":       "#9CA3AF",  # gray
+            "In Progress": "#2563EB",  # blue
+            "Done":        "#10B981",  # green
         }
         df["Status"] = pd.Categorical(df["Status"], categories=list(status_colors.keys()), ordered=True)
         fig = px.timeline(
             df, x_start="Start", x_end="Finish", y="Item",
-            color="Status", hover_data=["Status","Assignee","Progress"],
+            color="Status", hover_data=["Status", "Assignee", "Progress"],
             color_discrete_map=status_colors,
         )
         fig.update_layout(margin=dict(l=20, r=20, t=30, b=30), legend_title_text="Status")
-        st.plotly_chart(fig, width="stretch", config={"displaylogo": False, "responsive": True})
+        st.plotly_chart(fig, use_container_width=True, config={"displaylogo": False, "responsive": True})
 
-# ------------------ Members ------------------
+# ---------- Members Tab ----------
 with tab3:
     st.subheader("Project Members")
     if not CAN_WRITE:
