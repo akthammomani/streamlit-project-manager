@@ -662,7 +662,7 @@ with tab2:
         st.plotly_chart(fig_tl, use_container_width=True, config={"displaylogo": False, "responsive": True})
     else:
         st.info("Add start/end dates to items to see them on the timeline.")
-
+   st.markdown("---")
    # ---- Status & Assignee Breakdown (side-by-side, single titles) ----
     st.markdown("### Status & Assignee Breakdown")
     
@@ -696,7 +696,7 @@ with tab2:
         fig_assignee.update_layout(margin=dict(l=10, r=10, t=10, b=10), yaxis_title="", xaxis_title="")
         st.plotly_chart(fig_assignee, use_container_width=True, config={"displaylogo": False, "responsive": True})
 
-
+    st.markdown("---")
     # ---- Upcoming deadlines (next 14 days)
     st.caption("Upcoming deadlines (next 14 days)")
     if not dfA.empty:
