@@ -624,7 +624,8 @@ with tab2:
 
     st.markdown("---")
 
-    # ---- Timeline (Gantt) FIRST chart ----
+    # ---- Timeline (Gantt)----
+    st.markdown("### Timeline - Gantt Chart")
     rowsT = []
     for t in tasks_raw:
         if t["start_date"] and t["end_date"]:
