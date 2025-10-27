@@ -124,7 +124,7 @@
 ---
 
 ## Screenshots
-*(Add a few: Tasks grid, Project Analytics, Members.)*
+
 
 ---
 
