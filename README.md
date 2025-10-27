@@ -129,11 +129,14 @@
 
 * Project analytics Tab:
 
-  * ![Image](https://github.com/user-attachments/assets/9c592e6c-f5d3-4f0f-8616-7bebc162a0ea)
+  * Gantt Chart:
+    ![Image](https://github.com/user-attachments/assets/9c592e6c-f5d3-4f0f-8616-7bebc162a0ea)
 
-  * ![Image](https://github.com/user-attachments/assets/339539d0-2233-4b39-8626-b50570a0f680)
+  * Status & Assignee Breakdown:
+    ![Image](https://github.com/user-attachments/assets/339539d0-2233-4b39-8626-b50570a0f680)
 
-  * ![Image](https://github.com/user-attachments/assets/ee596443-0916-4c51-a680-c2df9c0761b3)
+  * Upcoming deadlines & At-Risk / Hygiene:
+    ![Image](https://github.com/user-attachments/assets/ee596443-0916-4c51-a680-c2df9c0761b3)
 
 * Member Tab:
 
