@@ -124,9 +124,21 @@
 ---
 
 ## Screenshots
+* Task Tab:
+![Image](https://github.com/user-attachments/assets/5bf66f25-c4bb-4a9f-9f9b-90014bdc6d86)
 
+* Project analytics Tab:
 
----
+  * ![Image](https://github.com/user-attachments/assets/9c592e6c-f5d3-4f0f-8616-7bebc162a0ea)
+
+  * ![Image](https://github.com/user-attachments/assets/339539d0-2233-4b39-8626-b50570a0f680)
+
+  * ![Image](https://github.com/user-attachments/assets/ee596443-0916-4c51-a680-c2df9c0761b3)
+
+* Member Tab:
+
+![Image](https://github.com/user-attachments/assets/b508ab94-a90f-4bab-8eea-41388346ccaf)
+
 
 ## License
 MIT
