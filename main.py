@@ -147,7 +147,7 @@ def full_screen_login():
         with st.form("login_form", clear_on_submit=False):
             email = st.text_input("Your email", placeholder="you@example.com")
             name  = st.text_input("Your name (optional)")
-            submitted = st.form_submit_button("Sign in / Continue", use_container_width=True)
+            submitted = st.form_submit_button("Sign in / Continue", width='stretch')
         if submitted:
             if not email:
                 st.warning("Please enter your email.")
@@ -170,7 +170,7 @@ def full_screen_project_gate(user_email: str):
 
         if projects:
             opt_proj = st.selectbox("Open existing project", options=projects, format_func=lambda p: p.name)
-            if st.button("Open project", use_container_width=True):
+            if st.button("Open project", width='stretch'):
                 st.session_state["selected_project_id"] = opt_proj.id
                 force_rerun()
 
@@ -188,7 +188,7 @@ def full_screen_project_gate(user_email: str):
             with c4:
                 pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="center_pin")
             members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="center_members")
-            submit_new = st.form_submit_button("Create project", use_container_width=True)
+            submit_new = st.form_submit_button("Create project", width='stretch')
 
         if submit_new:
             if not p_name:
@@ -272,7 +272,7 @@ with st.sidebar:
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 3, 1])
     with c2:
-        st.image(load_logo(), use_container_width=True)
+        st.image(load_logo(), width='stretch')
     st.caption(f"Signed in as **{user['email']}**")
     st.markdown("---")
     # Always-visible Contacts (pill buttons)
@@ -307,7 +307,7 @@ with st.sidebar:
             pin_val = st.text_input("Project PIN", type="password", disabled=is_public, key="sb_pin",
                                     help="Members will need this PIN to open the project.")
         members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="sb_members")
-        if st.button("Create project", use_container_width=True, key="sb_create"):
+        if st.button("Create project", width='stretch', key="sb_create"):
             if not p_name:
                 st.warning("Please enter a project name.")
             elif p_end < p_start:
@@ -751,7 +751,7 @@ with tab2:
             color_discrete_map=status_colors,
         )
         fig_tl.update_layout(margin=dict(l=20,r=20,t=30,b=30), legend_title_text="Status")
-        st.plotly_chart(fig_tl, use_container_width=True, config={"displaylogo": False, "responsive": True})
+        st.plotly_chart(fig_tl, width='stretch', config={"displaylogo": False, "responsive": True})
     else:
         st.info("Add start/end dates to items to see them on the timeline.")
     st.markdown("---")
@@ -772,7 +772,7 @@ with tab2:
         )
         fig_status.update_traces(textposition="outside")
         fig_status.update_layout(margin=dict(l=10, r=10, t=10, b=10), yaxis_title="", xaxis_title="")
-        st.plotly_chart(fig_status, use_container_width=True, config={"displaylogo": False, "responsive": True})
+        st.plotly_chart(fig_status, width='stretch', config={"displaylogo": False, "responsive": True})
     
     with col2:
         st.markdown("**Workload by Assignee**")
@@ -786,7 +786,7 @@ with tab2:
         )
         fig_assignee.update_traces(textposition="outside")
         fig_assignee.update_layout(margin=dict(l=10, r=10, t=10, b=10), yaxis_title="", xaxis_title="")
-        st.plotly_chart(fig_assignee, use_container_width=True, config={"displaylogo": False, "responsive": True})
+        st.plotly_chart(fig_assignee, width='stretch', config={"displaylogo": False, "responsive": True})
 
     st.markdown("---")
     # ---- Upcoming deadlines (next 14 days)
