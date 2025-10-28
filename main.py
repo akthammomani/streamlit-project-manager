@@ -349,7 +349,7 @@ CAN_WRITE = role in ("owner", "editor")
 IS_OWNER  = role == "owner"
 
 # === BEGIN: Collapsible Gantt helpers =========================================
-# ---- state helpers (unchanged) ---------------------------------------------
+# ---- state helpers -----------------------------------------------------------
 def _expanded_key(pid: int) -> str:
     return f"gantt_expanded_{pid}"
 
@@ -363,11 +363,11 @@ def _toggle_expanded(pid: int, task_id: int):
     else:
         s.add(task_id)
 
-# ---- data builder -----------------------------------------------------------
+# ---- data builder ------------------------------------------------------------
 def _build_collapsible_gantt_df(pid: int) -> pd.DataFrame:
     """
-    Returns rows to draw in the timeline based on which parents are expanded.
-    Includes a 'label' with ▸/▾ glyphs and indentation to emulate a tree.
+    Build a flat table for the timeline. Parent rows (tasks) get ▸/▾ caret and
+    children (subtasks) are indented. We DO NOT show internal task IDs anymore.
     """
     expanded = st.session_state[_expanded_key(pid)]
     rows = []
@@ -380,36 +380,39 @@ def _build_collapsible_gantt_df(pid: int) -> pd.DataFrame:
     for t in sorted(tasks, key=_sort_key):
         t_id = t["id"]
         has_dates = bool(t["start_date"] and t["end_date"])
-        glyph = "▾" if t_id in expanded else "▸"
-        label = f"{glyph} Task · {t_id} · {t['name'] or 'Untitled'}"
 
+        caret = "▾" if t_id in expanded else "▸"
+        label = f"{caret} {t['name'] or 'Untitled Task'}"  # <-- removed the numeric id
         rows.append({
             "Item": label,
             "Start": t["start_date"], "Finish": t["end_date"],
             "Status": _norm_status(t["status"] or "To-Do"),
-            "Assignee": t["assignee_email"], "Progress": float(t["progress"] or 0),
+            "Assignee": t["assignee_email"],
+            "Progress": float(t["progress"] or 0),
             "Kind": "Task",
-            "is_parent": True, "parent_id": t_id, "has_dates": has_dates
+            "is_parent": True,
+            "parent_id": t_id,
+            "has_dates": has_dates,
         })
 
         if t_id in expanded:
             subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t_id)]
             for s in sorted(subs, key=_sort_key):
-                label = f"    • {s['name'] or 'Subtask'}"  # indent bullet (4 spaces)
                 rows.append({
-                    "Item": label,
+                    "Item": f"    • {s['name'] or 'Subtask'}",  # indent bullet
                     "Start": s["start_date"], "Finish": s["end_date"],
                     "Status": _norm_status(s["status"] or "To-Do"),
-                    "Assignee": s["assignee_email"], "Progress": float(s["progress"] or 0),
+                    "Assignee": s["assignee_email"],
+                    "Progress": float(s["progress"] or 0),
                     "Kind": "Subtask",
-                    "is_parent": False, "parent_id": t_id,
-                    "has_dates": bool(s["start_date"] and s["end_date"])
+                    "is_parent": False,
+                    "parent_id": t_id,
+                    "has_dates": bool(s["start_date"] and s["end_date"]),
                 })
 
-    df = pd.DataFrame(rows)
-    return df
+    return pd.DataFrame(rows)
 
-# ---- main renderer ----------------------------------------------------------
+# ---- main renderer -----------------------------------------------------------
 def render_collapsible_gantt(pid: int):
     _init_expanded_set(pid)
     df = _build_collapsible_gantt_df(pid)
@@ -418,25 +421,23 @@ def render_collapsible_gantt(pid: int):
         st.info("Add start/end dates to tasks or subtasks to see them on the timeline.")
         return
 
-    # Coerce Start/Finish to datetimes and extend to end-of-day (so 1-day items render as bars)
+    # Normalize datetimes and extend Finish to end-of-day so 1-day items render as bars
     df["Start"]  = pd.to_datetime(df["Start"], errors="coerce")
     df["Finish"] = pd.to_datetime(df["Finish"], errors="coerce")
-    df["Finish"] = df["Finish"] + pd.Timedelta(days=1)
+    # remember original equality to mark milestones
+    was_zero_duration = (df["Start"].notna() & df["Finish"].notna() & (df["Start"] == df["Finish"]))
+    # extend bar to 23:59:59.999 for the chart
+    df["Finish"] = df["Finish"] + pd.Timedelta(milliseconds=86399999)  # ≈ 24h - 1ms
 
-    # Milestones (zero-duration BEFORE the +1 day shift) – recompute from raw
-    # Anything originally with identical dates should be treated as milestone
-    milestones_mask = (df["Start"].notna() & df["Finish"].notna() &
-                       ((df["Finish"] - pd.Timedelta(days=1)) == df["Start"]))
-    milestones = df.loc[milestones_mask].copy()
-    # show diamonds exactly at their (original) end date:
-    if not milestones.empty:
-        milestones["diamond_x"] = milestones["Start"]  # use start/original point
-
-    status_colors = {"To-Do":"#9CA3AF","In Progress":"#2563EB","Done":"#10B981"}
+    status_colors = {"To-Do": "#9CA3AF", "In Progress": "#2563EB", "Done": "#10B981"}
     df["Status"] = pd.Categorical(df["Status"], categories=list(status_colors.keys()), ordered=True)
 
-    # Respect builder order for y categories
+    # Respect current order (parents + children already sorted)
     y_order = list(df["Item"])
+
+    # Attach reliable customdata so clicks are easy to interpret
+    df["_cd_is_parent"] = df["is_parent"].astype(bool)
+    df["_cd_parent_id"] = df["parent_id"].astype("Int64")
 
     fig = px.timeline(
         df,
@@ -448,21 +449,29 @@ def render_collapsible_gantt(pid: int):
         color_discrete_map=status_colors,
     )
 
-    # clean look
+    # Provide customdata to all bar traces so clicks return it
+    for tr in fig.data:
+        # determine subset of df used in this trace
+        mask = (df["Status"] == tr.name) if "name" in tr and tr.name in status_colors else pd.Series([True] * len(df))
+        tr.customdata = df.loc[mask, ["_cd_is_parent", "_cd_parent_id"]].to_numpy()
+
+    # cleaner look
     fig.update_traces(marker_line_width=0, opacity=1)
 
-    # Add milestone diamonds
-    if not milestones.empty:
+    # Milestone diamonds (original Start==Finish)
+    if was_zero_duration.any():
+        ms = df.loc[was_zero_duration].copy()
+        # Put diamond at the original point (Start)
         fig.add_trace(
             go.Scatter(
-                x=milestones["diamond_x"],
-                y=milestones["Item"],
+                x=ms["Start"],
+                y=ms["Item"],
                 mode="markers",
                 marker_symbol="diamond",
                 marker_size=10,
                 marker_color="#F59E0B",
                 name="Milestone",
-                hovertext=milestones["Kind"],
+                hovertext=ms["Kind"],
                 hoverinfo="text+x+y",
             )
         )
@@ -475,8 +484,9 @@ def render_collapsible_gantt(pid: int):
         text="Today", showarrow=False, font=dict(color="#EF4444")
     )
 
-    # Layout: reversed y (Gantt style), generous left margin for labels
-    left_margin = 240
+    # Layout – bigger left margin for labels, height scales with rows
+    left_margin = 260
+    row_h = 34
     fig.update_layout(
         title="Gantt — click a TASK row to expand/collapse its subtasks",
         yaxis=dict(
@@ -491,29 +501,29 @@ def render_collapsible_gantt(pid: int):
         bargap=0.25,
         plot_bgcolor="rgba(0,0,0,0)",
         clickmode="event+select",
+        height=max(360, 120 + row_h * len(y_order)),
     )
 
-    # height scales with number of rows (min 360)
-    row_h = 34
-    fig.update_layout(height=max(360, 120 + row_h * len(y_order)))
-
+    # Render with click capture
     clicks = plotly_events(
         fig,
         click_event=True, hover_event=False, select_event=False,
         override_height=fig.layout.height, key=f"gantt_{pid}"
     )
 
-    # Toggle only when a parent label is clicked (they start with ▸/▾ Task · <id> · ...)
+    # Toggle expansion ONLY when a parent (task) bar is clicked
     if clicks:
-        y_label = clicks[0].get("y")
-        if isinstance(y_label, str) and y_label.startswith(("▸ Task · ", "▾ Task · ")):
-            try:
-                task_id_str = y_label.split("Task · ", 1)[1].split(" · ", 1)[0]
-                _toggle_expanded(pid, int(task_id_str))
-                st.rerun()
-            except Exception:
-                pass
-# === END: Collapsible Gantt helpers ===========================================
+        cd = clicks[0].get("customdata")
+        if isinstance(cd, (list, tuple)) and len(cd) == 2:
+            is_parent, parent_id = cd
+            if is_parent and parent_id is not None:
+                try:
+                    _toggle_expanded(pid, int(parent_id))
+                    st.rerun()
+                except Exception:
+                    pass
+# === END: Collapsible Gantt helpers =========================================
+
 
 
 
