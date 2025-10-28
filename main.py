@@ -470,10 +470,22 @@ def render_collapsible_gantt(pid: int):
     # Today line
     today = pd.to_datetime(date.today())
     fig.add_vline(
-        x=today, line_width=2, line_dash="dot", line_color="#EF4444",
-        annotation_text="Today", annotation_position="top"
+    x=today,
+    line_width=2,
+    line_dash="dot",
+    line_color="#EF4444",
     )
-
+    
+    # add the label as a normal annotation (safer with datetime axes)
+    fig.add_annotation(
+        x=today,
+        y=1.02,                # a bit above the plotting area
+        xref="x",
+        yref="paper",
+        text="Today",
+        showarrow=False,
+        font=dict(color="#EF4444")
+    )
     # Stronger “group” vibe: bold font for parents and subtle left padding already in label.
     # (Plotly can't bold some y ticks and not others directly; we prefix glyphs.)
     fig.update_layout(
