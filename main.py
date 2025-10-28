@@ -372,19 +372,17 @@ def _build_collapsible_gantt_df(pid: int) -> pd.DataFrame:
     expanded = st.session_state[_expanded_key(pid)]
     rows = []
 
-    # load tasks
     tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(pid)]
-    # stable order: by Start then name
+
     def _sort_key(x):
         return (x.get("start_date") or date.min, x.get("name") or "")
 
     for t in sorted(tasks, key=_sort_key):
         t_id = t["id"]
         has_dates = bool(t["start_date"] and t["end_date"])
-
-        # parent row
         glyph = "▾" if t_id in expanded else "▸"
         label = f"{glyph} Task · {t_id} · {t['name'] or 'Untitled'}"
+
         rows.append({
             "Item": label,
             "Start": t["start_date"], "Finish": t["end_date"],
@@ -394,7 +392,6 @@ def _build_collapsible_gantt_df(pid: int) -> pd.DataFrame:
             "is_parent": True, "parent_id": t_id, "has_dates": has_dates
         })
 
-        # children only when expanded
         if t_id in expanded:
             subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t_id)]
             for s in sorted(subs, key=_sort_key):
@@ -410,7 +407,6 @@ def _build_collapsible_gantt_df(pid: int) -> pd.DataFrame:
                 })
 
     df = pd.DataFrame(rows)
-    # show only items that have dates (timelines need bars); milestones handled separately
     return df
 
 # ---- main renderer ----------------------------------------------------------
@@ -418,93 +414,93 @@ def render_collapsible_gantt(pid: int):
     _init_expanded_set(pid)
     df = _build_collapsible_gantt_df(pid)
 
-    # separate milestones (zero duration) so we can draw diamonds
-    # (We still keep them in df for labels; scatter adds the diamonds.)
-    def _is_milestone(s, f):
-        return (pd.notna(s) and pd.notna(f) and pd.to_datetime(s) == pd.to_datetime(f))
-
-    milestones = []
-    if not df.empty:
-        for _, r in df.iterrows():
-            if _is_milestone(r["Start"], r["Finish"]):
-                milestones.append(r)
-
-    status_colors = {"To-Do":"#9CA3AF","In Progress":"#2563EB","Done":"#10B981"}
-    if df.empty:
+    if df.empty or not df["has_dates"].any():
         st.info("Add start/end dates to tasks or subtasks to see them on the timeline.")
         return
 
+    # Coerce Start/Finish to datetimes and extend to end-of-day (so 1-day items render as bars)
+    df["Start"]  = pd.to_datetime(df["Start"], errors="coerce")
+    df["Finish"] = pd.to_datetime(df["Finish"], errors="coerce")
+    df["Finish"] = df["Finish"] + pd.Timedelta(days=1)
+
+    # Milestones (zero-duration BEFORE the +1 day shift) – recompute from raw
+    # Anything originally with identical dates should be treated as milestone
+    milestones_mask = (df["Start"].notna() & df["Finish"].notna() &
+                       ((df["Finish"] - pd.Timedelta(days=1)) == df["Start"]))
+    milestones = df.loc[milestones_mask].copy()
+    # show diamonds exactly at their (original) end date:
+    if not milestones.empty:
+        milestones["diamond_x"] = milestones["Start"]  # use start/original point
+
+    status_colors = {"To-Do":"#9CA3AF","In Progress":"#2563EB","Done":"#10B981"}
     df["Status"] = pd.Categorical(df["Status"], categories=list(status_colors.keys()), ordered=True)
 
-    # Order: parents/subtasks already sequenced by builder; fix y axis category order
+    # Respect builder order for y categories
     y_order = list(df["Item"])
 
     fig = px.timeline(
-        df, x_start="Start", x_end="Finish", y="Item",
-        color="Status", hover_data=["Kind","Assignee","Progress"],
-        color_discrete_map=status_colors
+        df,
+        x_start="Start",
+        x_end="Finish",
+        y="Item",
+        color="Status",
+        hover_data=["Kind", "Assignee", "Progress"],
+        color_discrete_map=status_colors,
     )
-    # crisp look
+
+    # clean look
     fig.update_traces(marker_line_width=0, opacity=1)
 
-    # bold parents (thicker marker opacity via separate trace styling)
-    # We mark parent rows by reducing bar thickness of children visually:
-    # NOTE: exact bar height control is limited in timeline; we emulate by alpha tweak
-    for i, tr in enumerate(fig.data):
-        # Match trace items back to df rows by legendgroup (plotly groups all bars together),
-        # so we can’t per-bar style thickness. We keep opacity uniform instead.
-        pass
+    # Add milestone diamonds
+    if not milestones.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=milestones["diamond_x"],
+                y=milestones["Item"],
+                mode="markers",
+                marker_symbol="diamond",
+                marker_size=10,
+                marker_color="#F59E0B",
+                name="Milestone",
+                hovertext=milestones["Kind"],
+                hoverinfo="text+x+y",
+            )
+        )
 
-    # Add milestone diamonds (for zero-duration items)
-    if milestones:
-        md = pd.DataFrame(milestones)
-        # Plot diamonds at their end date, at their Y label
-        fig.add_trace(go.Scatter(
-            x=md["Finish"], y=md["Item"],
-            mode="markers",
-            marker_symbol="diamond", marker_size=10,
-            marker_color="#F59E0B",
-            name="Milestone", hovertext=md["Kind"], hoverinfo="text+x+y"
-        ))
-
-    # Today line
+    # Today line + label
     today = pd.to_datetime(date.today())
-    fig.add_vline(
-    x=today,
-    line_width=2,
-    line_dash="dot",
-    line_color="#EF4444",
-    )
-    
-    # add the label as a normal annotation (safer with datetime axes)
+    fig.add_vline(x=today, line_width=2, line_dash="dot", line_color="#EF4444")
     fig.add_annotation(
-        x=today,
-        y=1.02,                # a bit above the plotting area
-        xref="x",
-        yref="paper",
-        text="Today",
-        showarrow=False,
-        font=dict(color="#EF4444")
+        x=today, y=1.02, xref="x", yref="paper",
+        text="Today", showarrow=False, font=dict(color="#EF4444")
     )
-    # Stronger “group” vibe: bold font for parents and subtle left padding already in label.
-    # (Plotly can't bold some y ticks and not others directly; we prefix glyphs.)
+
+    # Layout: reversed y (Gantt style), generous left margin for labels
+    left_margin = 240
     fig.update_layout(
         title="Gantt — click a TASK row to expand/collapse its subtasks",
-        yaxis=dict(autorange="reversed",
-                   categoryorder="array", categoryarray=y_order,
-                   tickfont=dict(size=13)),
-        margin=dict(l=20, r=20, t=40, b=30),
+        yaxis=dict(
+            autorange="reversed",
+            categoryorder="array",
+            categoryarray=y_order,
+            tickfont=dict(size=13),
+            automargin=True,
+        ),
+        margin=dict(l=left_margin, r=30, t=46, b=36),
         legend_title_text="Status",
-        height=560,
         bargap=0.25,
         plot_bgcolor="rgba(0,0,0,0)",
         clickmode="event+select",
     )
 
+    # height scales with number of rows (min 360)
+    row_h = 34
+    fig.update_layout(height=max(360, 120 + row_h * len(y_order)))
+
     clicks = plotly_events(
         fig,
         click_event=True, hover_event=False, select_event=False,
-        override_height=560, key=f"gantt_{pid}"
+        override_height=fig.layout.height, key=f"gantt_{pid}"
     )
 
     # Toggle only when a parent label is clicked (they start with ▸/▾ Task · <id> · ...)
@@ -518,6 +514,7 @@ def render_collapsible_gantt(pid: int):
             except Exception:
                 pass
 # === END: Collapsible Gantt helpers ===========================================
+
 
 
 with st.sidebar.expander("Manage current project"):
