@@ -1,5 +1,7 @@
 # main.py
 import streamlit as st
+from streamlit_plotly_events import plotly_events
+
 
 def force_rerun():
     fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
@@ -344,6 +346,106 @@ if not getattr(current_project, "is_public", True) and not st.session_state.get(
 role = db.get_user_role(current_project.id, user["email"]) or "viewer"
 CAN_WRITE = role in ("owner", "editor")
 IS_OWNER  = role == "owner"
+
+# === BEGIN: Collapsible Gantt helpers =========================================
+def _gantt_exp_key(pid: int) -> str:
+    return f"expanded_tasks_{pid}"
+
+def _init_expanded_set(pid: int):
+    k = _gantt_exp_key(pid)
+    if k not in st.session_state:
+        st.session_state[k] = set()
+
+def _toggle_expanded(pid: int, task_id: int):
+    k = _gantt_exp_key(pid)
+    s = st.session_state[k]
+    if task_id in s:
+        s.remove(task_id)
+    else:
+        s.add(task_id)
+
+def _build_collapsible_gantt_df(pid: int) -> pd.DataFrame:
+    """Parent tasks always show. Subtasks show only if the parent is expanded."""
+    rows = []
+    tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(pid)]
+    expanded = st.session_state[_gantt_exp_key(pid)]
+
+    for t in tasks:
+        # parent row
+        if t["start_date"] and t["end_date"]:
+            rows.append({
+                "Item": f"Task · {t['id']} · {t['name']}",
+                "TaskID": t["id"],
+                "Kind": "task",
+                "Start": t["start_date"],
+                "Finish": t["end_date"],
+                "Status": _norm_status(t["status"]),
+                "Assignee": t["assignee_email"],
+                "Progress": round(float(t.get("progress") or 0), 1),
+            })
+
+        # subtasks only if expanded
+        if t["id"] in expanded:
+            subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
+            for s in subs:
+                if s["start_date"] and s["end_date"]:
+                    rows.append({
+                        # small visual indent + connector
+                        "Item": f"   ⤷ {s['name']}",
+                        "TaskID": t["id"],              # still link to parent
+                        "Kind": "subtask",
+                        "Start": s["start_date"],
+                        "Finish": s["end_date"],
+                        "Status": _norm_status(s["status"]),
+                        "Assignee": s["assignee_email"],
+                        "Progress": round(float(s.get("progress") or 0), 1),
+                    })
+    return pd.DataFrame(rows)
+
+def render_collapsible_gantt(pid: int):
+    _init_expanded_set(pid)
+    df = _build_collapsible_gantt_df(pid)
+
+    if df.empty:
+        st.info("Add start/end dates to tasks or subtasks to see them on the timeline.")
+        return
+
+    status_colors = {"To-Do": "#9CA3AF", "In Progress": "#2563EB", "Done": "#10B981"}
+    df["Status"] = pd.Categorical(df["Status"], categories=list(status_colors.keys()), ordered=True)
+
+    fig = px.timeline(
+        df, x_start="Start", x_end="Finish", y="Item",
+        color="Status", hover_data=["Status", "Assignee", "Progress"],
+        color_discrete_map=status_colors
+    )
+    fig.update_layout(
+        title="Timeline — click a TASK row to expand/collapse its subtasks",
+        margin=dict(l=20, r=20, t=40, b=30),
+        legend_title_text="Status",
+        yaxis=dict(autorange="reversed"),
+    )
+
+    # Catch clicks
+    clicks = plotly_events(
+        fig, click_event=True, hover_event=False, select_event=False,
+        override_height=520, override_width="100%"
+    )
+
+    # If a parent task was clicked, toggle it
+    if clicks:
+        y_label = clicks[0].get("y")  # the clicked y value (category label)
+        # Parent task labels are "Task · <id> · <name>"
+        if isinstance(y_label, str) and y_label.startswith("Task · "):
+            try:
+                rest = y_label.split("Task · ", 1)[1]
+                task_id_str = rest.split(" · ", 1)[0]
+                task_id = int(task_id_str)
+                _toggle_expanded(pid, task_id)
+                st.rerun()
+            except Exception:
+                pass
+# === END: Collapsible Gantt helpers ===========================================
+
 
 with st.sidebar.expander("Manage current project"):
     if IS_OWNER:
@@ -718,42 +820,7 @@ with tab2:
 
     # ---- Timeline (Gantt)----
     st.markdown("### Timeline - Gantt Chart")
-    rowsT = []
-    for t in tasks_raw:
-        if t["start_date"] and t["end_date"]:
-            rowsT.append({
-                "Item": f"Task · {t['name']}",
-                "Start": t["start_date"],
-                "Finish": t["end_date"],
-                "Status": _norm_status(t["status"]),
-                "Assignee": t["assignee_email"],
-                "Progress": round(float(t["progress"] or 0), 1)
-            })
-        if include_subtasks:
-            for s in db.get_subtasks_for_task(t["id"]):
-                sdict = _to_subtask_dict(s)
-                if sdict["start_date"] and sdict["end_date"]:
-                    rowsT.append({
-                        "Item": f"Subtask · {sdict['name']}",
-                        "Start": sdict["start_date"],
-                        "Finish": sdict["end_date"],
-                        "Status": _norm_status(sdict["status"]),
-                        "Assignee": sdict["assignee_email"],
-                        "Progress": round(float(sdict["progress"] or 0), 1)
-                    })
-    if rowsT:
-        dfT = pd.DataFrame(rowsT)
-        status_colors = {"To-Do":"#9CA3AF","In Progress":"#2563EB","Done":"#10B981"}
-        dfT["Status"] = pd.Categorical(dfT["Status"], categories=list(status_colors.keys()), ordered=True)
-        fig_tl = px.timeline(
-            dfT, x_start="Start", x_end="Finish", y="Item",
-            color="Status", hover_data=["Status","Assignee","Progress"],
-            color_discrete_map=status_colors,
-        )
-        fig_tl.update_layout(margin=dict(l=20,r=20,t=30,b=30), legend_title_text="Status")
-        st.plotly_chart(fig_tl, use_container_width=True, config={"displaylogo": False, "responsive": True})
-    else:
-        st.info("Add start/end dates to items to see them on the timeline.")
+    render_collapsible_gantt(current_project.id)
     st.markdown("---")
    # ---- Status & Assignee Breakdown (side-by-side, single titles) ----
     st.markdown("### Status & Assignee Breakdown")
