@@ -17,6 +17,8 @@ import base64
 from pathlib import Path
 from PIL import Image
 import db
+import importlib
+importlib.reload(db)
 
 def load_icon(name="logo_1.png"):
     p = Path(name)
