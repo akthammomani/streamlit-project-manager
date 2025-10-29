@@ -326,52 +326,6 @@ with st.sidebar:
 
         
 
-st.title(current_project.name)
-st.caption(f"{current_project.start_date} → {current_project.end_date}")
-
-# project description block
-proj_desc = getattr(current_project, "description", None) or ""
-if proj_desc.strip():
-    st.markdown(
-        f"""
-        <div style="
-            margin-top:0.5rem;
-            padding:0.75rem 1rem;
-            border:1px solid #e5e7eb;
-            border-radius:0.75rem;
-            background-color:#fafafa;
-            max-width:900px;
-        ">
-            <div style="font-size:.8rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.03em; margin-bottom:0.25rem;">
-                Project Description
-            </div>
-            <div style="font-size:.9rem; color:#374151; line-height:1.4;">
-                {proj_desc}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-else:
-    # fallback if there's no description yet
-    st.markdown(
-        """
-        <div style="
-            margin-top:0.5rem;
-            padding:0.75rem 1rem;
-            border:1px dashed #d1d5db;
-            border-radius:0.75rem;
-            background-color:#fcfcfc;
-            max-width:900px;
-            color:#9ca3af;
-            font-size:.8rem;
-        ">
-            No project description yet.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
 # PIN gate
 pin_key = f"pin_ok_{current_project.id}"
 if not getattr(current_project, "is_public", True) and not st.session_state.get(pin_key):
@@ -390,6 +344,91 @@ if not getattr(current_project, "is_public", True) and not st.session_state.get(
 role = db.get_user_role(current_project.id, user["email"]) or "viewer"
 CAN_WRITE = role in ("owner", "editor")
 IS_OWNER  = role == "owner"
+
+st.title(current_project.name)
+
+# date range under title
+st.caption(f"{current_project.start_date} → {current_project.end_date}")
+
+# pull current description safely
+proj_desc = getattr(current_project, "description", None) or ""
+has_desc = bool(proj_desc.strip())
+
+# --- read-only / display card ---
+if has_desc:
+    st.markdown(
+        f"""
+        <div style="
+            margin-top:0.5rem;
+            padding:0.75rem 1rem;
+            border:1px solid #e5e7eb;
+            border-radius:0.75rem;
+            background-color:#fafafa;
+            max-width:900px;
+        ">
+            <div style="font-size:.8rem; font-weight:600; color:#6b7280;
+                        text-transform:uppercase; letter-spacing:.03em;
+                        margin-bottom:0.25rem;">
+                Project Description
+            </div>
+            <div style="font-size:.9rem; color:#374151; line-height:1.4;">
+                {proj_desc}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    st.markdown(
+        """
+        <div style="
+            margin-top:0.5rem;
+            padding:0.75rem 1rem;
+            border:1px dashed #d1d5db;
+            border-radius:0.75rem;
+            background-color:#fcfcfc;
+            max-width:900px;
+            color:#9ca3af;
+            font-size:.8rem;
+        ">
+            No project description yet.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# --- inline editor (only for owner/editor) ---
+if CAN_WRITE:
+    with st.expander("Edit project description"):
+        with st.form(f"edit_desc_form_{current_project.id}", clear_on_submit=False):
+            new_desc = st.text_area(
+                "Description",
+                value=proj_desc,
+                height=120,
+                help="This text shows under the project name for everyone."
+            )
+
+            col_save, col_clear = st.columns([1,1])
+            save_clicked  = col_save.form_submit_button("💾 Save description")
+            clear_clicked = col_clear.form_submit_button("🗑 Clear description")
+
+        # handle save / clear
+        if save_clicked:
+            ok = db.update_project_description(current_project.id, new_desc.strip())
+            if not ok:
+                st.error("Updating description failed.")
+            else:
+                st.success("Description updated.")
+                force_rerun()
+
+        if clear_clicked:
+            ok = db.update_project_description(current_project.id, "")
+            if not ok:
+                st.error("Clearing description failed.")
+            else:
+                st.success("Description cleared.")
+                force_rerun()
+
 
 # === BEGIN: Collapsible Gantt helpers =========================================
 # ---- Gantt state helpers ---------------------------------
