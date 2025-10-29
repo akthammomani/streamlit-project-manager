@@ -399,38 +399,6 @@ else:
         unsafe_allow_html=True
     )
 
-# --- inline editor (only for owner/editor) ---
-if CAN_WRITE:
-    with st.expander("Edit project description"):
-        with st.form(f"edit_desc_form_{current_project.id}", clear_on_submit=False):
-            new_desc = st.text_area(
-                "Description",
-                value=proj_desc,
-                height=120,
-                help="This text shows under the project name for everyone."
-            )
-
-            col_save, col_clear = st.columns([1,1])
-            save_clicked  = col_save.form_submit_button("💾 Save description")
-            clear_clicked = col_clear.form_submit_button("🗑 Clear description")
-
-        # handle save / clear
-        if save_clicked:
-            ok = db.update_project_description(current_project.id, new_desc.strip())
-            if not ok:
-                st.error("Updating description failed.")
-            else:
-                st.success("Description updated.")
-                force_rerun()
-
-        if clear_clicked:
-            ok = db.update_project_description(current_project.id, "")
-            if not ok:
-                st.error("Clearing description failed.")
-            else:
-                st.success("Description cleared.")
-                force_rerun()
-
 
 # === BEGIN: Collapsible Gantt helpers =========================================
 # ---- Gantt state helpers ---------------------------------
@@ -596,10 +564,10 @@ def render_collapsible_gantt(pid: int):
 
 with st.sidebar.expander("Manage current project"):
     if IS_OWNER:
-        # Name edit
+        # --- Rename project ---
         new_name = st.text_input("Rename project", value=current_project.name, key="rename_proj")
 
-        # Date edits
+        # --- Date edits ---
         c_dates1, c_dates2 = st.columns(2)
         with c_dates1:
             new_start = st.date_input("Start date", value=current_project.start_date, key="proj_start_edit")
@@ -609,9 +577,10 @@ with st.sidebar.expander("Manage current project"):
         cA, cB, cC = st.columns(3)
         with cA:
             if st.button("Save name", key="save_project_name"):
-                db.rename_project(current_project.id, new_name)
+                db.rename_project(current_project.id, new_name.strip())
                 st.success("Project renamed.")
                 force_rerun()
+
         with cB:
             if st.button("Save dates", key="save_project_dates"):
                 if new_end < new_start:
@@ -623,15 +592,53 @@ with st.sidebar.expander("Manage current project"):
                     else:
                         st.success("Project dates updated.")
                         force_rerun()
+
         with cC:
             if st.button("Delete project", type="secondary", key="delete_project_btn"):
                 db.delete_project(current_project.id)
                 st.success("Project deleted.")
                 st.session_state["selected_project_id"] = None
                 force_rerun()
+
     else:
         st.caption("Only the owner can manage this project.")
+
+    # NEW ✨: description editor in the sidebar for owner/editor
+    if CAN_WRITE:
+        st.markdown("---")
+        with st.expander("Edit project description", expanded=False):
+            with st.form(f"sidebar_edit_desc_form_{current_project.id}", clear_on_submit=False):
+                new_desc_sidebar = st.text_area(
+                    "Description",
+                    value=proj_desc,
+                    height=120,
+                    help="This text shows under the project name for everyone."
+                )
+
+                col_s1, col_s2 = st.columns([1,1])
+                save_sidebar_clicked  = col_s1.form_submit_button("💾 Save description")
+                clear_sidebar_clicked = col_s2.form_submit_button("🗑 Clear description")
+
+            # same handlers
+            if save_sidebar_clicked:
+                ok = db.update_project_description(current_project.id, new_desc_sidebar.strip())
+                if not ok:
+                    st.error("Updating description failed.")
+                else:
+                    st.success("Description updated.")
+                    force_rerun()
+
+            if clear_sidebar_clicked:
+                ok = db.update_project_description(current_project.id, "")
+                if not ok:
+                    st.error("Clearing description failed.")
+                else:
+                    st.success("Description cleared.")
+                    force_rerun()
+
+    # keep the contacts at the bottom
     render_contacts_sidebar()
+
 # ---------- Tabs ----------
 tab1, tab2, tab3 = st.tabs(["Tasks", "Project Analytics", "Members"])
 
