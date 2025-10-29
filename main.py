@@ -26,14 +26,13 @@ def load_icon(name="logo_1.png"):
         p = Path(__file__).with_name(name)   
     return Image.open(p)
     
-# --- App chrome ---
 st.set_page_config(
     page_title="Strivio - Project Manager",
     page_icon=load_icon(), #"logo_1.png",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-# Solid Tabs theme (keep this once)
+
 st.markdown("""
 <style>
 :root{
@@ -299,7 +298,7 @@ with st.sidebar:
         force_rerun()
 
     with st.expander("New project"):
-        p_name = st.text_input("Project name", placeholder="AI-Powered Apple Leaf Specialist", key="sb_p_name")
+        p_name = st.text_input("Project name", placeholder="Please enter a project name!", key="sb_p_name")
         col_p1, col_p2 = st.columns(2)
         with col_p1:
             p_start = st.date_input("Start", value=date.today(), key="sb_p_start")
@@ -314,7 +313,7 @@ with st.sidebar:
         members_csv = st.text_area("Member emails (comma-separated)", placeholder="a@x.com, b@y.com", key="sb_members")
         if st.button("Create project", use_container_width=True, key="sb_create"):
             if not p_name:
-                st.warning("Please enter a project name.")
+                st.warning("Please enter a project name!")
             elif p_end < p_start:
                 st.warning("End date must be after start date.")
             elif not is_public and not pin_val:
@@ -508,12 +507,10 @@ def render_collapsible_gantt(pid: int):
 
     df = pd.DataFrame(rows)
 
-    # === NEW: dynamic height ==================================
-    # tune these numbers to taste
-    base_height = 200          # padding for axes, legend, top space
+    # === dynamic height ==================================
+    base_height = 200          
     per_row_px  = 28 if show_subtasks else 22
     chart_height = base_height + per_row_px * len(df)
-    # clamp so it's never tiny or ridiculous
     if chart_height < 300:
         chart_height = 300
     if chart_height > 1200:
@@ -535,7 +532,7 @@ def render_collapsible_gantt(pid: int):
     fig.update_layout(
         margin=dict(l=20, r=20, t=10, b=30),
         legend_title_text="Status",
-        height=chart_height,   # <--- apply dynamic height
+        height=chart_height,   
     )
 
     # dotted vlines only for top-level tasks
@@ -603,7 +600,7 @@ with st.sidebar.expander("Manage current project"):
     else:
         st.caption("Only the owner can manage this project.")
 
-    # NEW ✨: description editor in the sidebar for owner/editor
+    # description editor in the sidebar for owner/editor
     if CAN_WRITE:
         st.markdown("---")
         with st.expander("Edit project description", expanded=False):
@@ -636,7 +633,6 @@ with st.sidebar.expander("Manage current project"):
                     st.success("Description cleared.")
                     force_rerun()
 
-    # keep the contacts at the bottom
     render_contacts_sidebar()
 
 # ---------- Tabs ----------
@@ -669,7 +665,7 @@ with tab1:
             "Start": t["start_date"],
             "End": t["end_date"],
             "Assignee": t["assignee_email"] or "",
-            "Progress%": pct,        # editable number only
+            "Progress%": pct,        
             "Description": "",
         })
         ids_for_rows.append(t["id"])
@@ -749,7 +745,7 @@ with tab1:
         except Exception as e:
             st.error(f"Save failed: {e}")
 
-    # -------- Subtasks (RESTORED) --------
+    # -------- Subtasks --------
     st.markdown("---")
     st.subheader("Subtasks")
     all_tasks_for_picker = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
