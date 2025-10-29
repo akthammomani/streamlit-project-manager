@@ -374,23 +374,20 @@ def _expanded(pid: int):
 def render_collapsible_gantt(pid: int):
     """
     Gantt timeline for the project:
-    - By default shows ONLY top-level tasks.
-    - Optional toggle to also include subtasks.
-    - Task labels are bold. Subtasks keep the ↳ arrow and normal weight.
-    - Adds dotted vertical guide lines at each task's start/end.
-    - X-axis is calendar dates.
+    - Default: only top-level tasks.
+    - Checkbox: include subtasks.
+    - Bold task labels, arrow subtasks.
+    - Dotted vertical lines at each task start/end.
+    - Dynamic chart height so subtasks view isn't squished.
     """
 
-    # --- pull tasks and subtasks from DB and normalize ---
     raw_tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(pid)]
 
-    # sort tasks by start_date (None goes last)
     def _sort_key(t):
         return (t["start_date"] is None,
                 t["start_date"] or pd.Timestamp.max.date())
     raw_tasks = sorted(raw_tasks, key=_sort_key)
 
-    # Build subtasks map {task_id: [subtask_dict,...]} and sort each list
     subtasks_map = {}
     for t in raw_tasks:
         subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
@@ -403,8 +400,7 @@ def render_collapsible_gantt(pid: int):
         )
         subtasks_map[t["id"]] = subs
 
-    # --- toggle UI (single checkbox) ---
-    # default is False (tasks only)
+    # checkbox (default False)
     show_subtasks = st.checkbox(
         "Show subtasks",
         value=False,
@@ -412,13 +408,7 @@ def render_collapsible_gantt(pid: int):
         help="Turn on to include subtasks in the timeline."
     )
 
-    # --- helper to make sure bars aren't 1-pixel ticks ---
     def _safe_dates(start_d, end_d):
-        """
-        Return (Start, Finish) as date objects.
-        If Finish <= Start, extend Finish by +1 day
-        so we always get a visible bar.
-        """
         if not start_d or not end_d:
             return None, None
         s = pd.to_datetime(start_d)
@@ -427,13 +417,12 @@ def render_collapsible_gantt(pid: int):
             e = s + pd.Timedelta(days=1)
         return s.date(), e.date()
 
-    rows = []               # rows for the dataframe we plot
-    task_rows_for_vlines = []  # only top-level tasks, for vertical guides
+    rows = []
+    task_rows_for_vlines = []
 
     for t in raw_tasks:
         start_fixed, end_fixed = _safe_dates(t["start_date"], t["end_date"])
         if start_fixed and end_fixed:
-            # Top-level task row (bold label)
             task_label = f"<b>{t['name']}</b>"
             parent_row = {
                 "Label": task_label,
@@ -447,13 +436,11 @@ def render_collapsible_gantt(pid: int):
             rows.append(parent_row)
             task_rows_for_vlines.append(parent_row)
 
-        # Only include subtasks if toggle is on
         if show_subtasks:
             for s in subtasks_map.get(t["id"], []):
                 st_fixed, en_fixed = _safe_dates(s["start_date"], s["end_date"])
                 if st_fixed and en_fixed:
                     rows.append({
-                        # subtask label: arrow, no bold
                         "Label": f"↳ {s['name']}",
                         "Start": st_fixed,
                         "Finish": en_fixed,
@@ -463,14 +450,24 @@ def render_collapsible_gantt(pid: int):
                         "Level": "subtask",
                     })
 
-    # --- handle "no data" gracefully ---
     if not rows:
         st.info("Add start/end dates to tasks to see them on the timeline.")
         return
 
     df = pd.DataFrame(rows)
 
-    # --- build the timeline chart ---
+    # === NEW: dynamic height ==================================
+    # tune these numbers to taste
+    base_height = 200          # padding for axes, legend, top space
+    per_row_px  = 28 if show_subtasks else 22
+    chart_height = base_height + per_row_px * len(df)
+    # clamp so it's never tiny or ridiculous
+    if chart_height < 300:
+        chart_height = 300
+    if chart_height > 1200:
+        chart_height = 1200
+    # ==========================================================
+
     fig = px.timeline(
         df,
         x_start="Start",
@@ -480,20 +477,16 @@ def render_collapsible_gantt(pid: int):
         hover_data=["Status", "Assignee", "Progress"],
     )
 
-    # Reverse Y so first row is on top
     fig.update_yaxes(autorange="reversed", title=None)
-
-    # Time axis formatting
     fig.update_xaxes(type="date", title=None)
 
-    # Layout polish
     fig.update_layout(
         margin=dict(l=20, r=20, t=10, b=30),
         legend_title_text="Status",
+        height=chart_height,   # <--- apply dynamic height
     )
 
-    # --- add dotted vertical lines for each task's start and end ---
-    # collect unique dates from TOP-LEVEL tasks only
+    # dotted vlines only for top-level tasks
     vline_dates = set()
     for tr in task_rows_for_vlines:
         vline_dates.add(pd.to_datetime(tr["Start"]))
@@ -507,22 +500,12 @@ def render_collapsible_gantt(pid: int):
             line_width=1,
         )
 
-    # --- (optional) slightly bigger font for tasks than subtasks? ---
-    # We already bolded tasks using <b> ... </b> in the label.
-    # Plotly will render <b>...</b> in axis tick labels, so tasks pop.
-
-    # --- show chart in Streamlit ---
-    # NOTE:
-    # Your current Streamlit version is older and doesn't fully know
-    #   st.plotly_chart(..., width="stretch")
-    # That's why you saw the yellow deprecation box.
-    # We'll use the older pattern `use_container_width=True`
-    # which works cleanly in your environment.
     st.plotly_chart(
         fig,
         use_container_width=True,
         config={"displaylogo": False},
     )
+
 
 # === END: Collapsible Gantt helpers =========================================
 
