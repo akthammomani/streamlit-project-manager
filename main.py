@@ -329,6 +329,49 @@ with st.sidebar:
 st.title(current_project.name)
 st.caption(f"{current_project.start_date} → {current_project.end_date}")
 
+# project description block
+proj_desc = getattr(current_project, "description", None) or ""
+if proj_desc.strip():
+    st.markdown(
+        f"""
+        <div style="
+            margin-top:0.5rem;
+            padding:0.75rem 1rem;
+            border:1px solid #e5e7eb;
+            border-radius:0.75rem;
+            background-color:#fafafa;
+            max-width:900px;
+        ">
+            <div style="font-size:.8rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.03em; margin-bottom:0.25rem;">
+                Project Description
+            </div>
+            <div style="font-size:.9rem; color:#374151; line-height:1.4;">
+                {proj_desc}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    # fallback if there's no description yet
+    st.markdown(
+        """
+        <div style="
+            margin-top:0.5rem;
+            padding:0.75rem 1rem;
+            border:1px dashed #d1d5db;
+            border-radius:0.75rem;
+            background-color:#fcfcfc;
+            max-width:900px;
+            color:#9ca3af;
+            font-size:.8rem;
+        ">
+            No project description yet.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 # PIN gate
 pin_key = f"pin_ok_{current_project.id}"
 if not getattr(current_project, "is_public", True) and not st.session_state.get(pin_key):
