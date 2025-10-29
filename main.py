@@ -373,65 +373,51 @@ def _expanded(pid: int):
 # ---- data builder ------------------------------------------------------------
 def render_collapsible_gantt(pid: int):
     """
-    Builds a Plotly timeline where:
-    - Each top-level task is always shown.
-    - Subtasks only show if that task is 'expanded'.
-    - You can toggle 'Tasks only' vs 'Tasks + Subtasks'.
-    - X-axis is real calendar dates.
-    - Y labels are clean (no ID column, no "Item" label).
+    Gantt timeline for the project:
+    - By default shows ONLY top-level tasks.
+    - Optional toggle to also include subtasks.
+    - Task labels are bold. Subtasks keep the ↳ arrow and normal weight.
+    - Adds dotted vertical guide lines at each task's start/end.
+    - X-axis is calendar dates.
     """
 
-    _init_expanded_set(pid)
-
-    # 1. Pull tasks/subtasks from DB and normalize them using your helpers
+    # --- pull tasks and subtasks from DB and normalize ---
     raw_tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(pid)]
 
     # sort tasks by start_date (None goes last)
     def _sort_key(t):
-        return (t["start_date"] is None, t["start_date"] or pd.Timestamp.max.date())
+        return (t["start_date"] is None,
+                t["start_date"] or pd.Timestamp.max.date())
     raw_tasks = sorted(raw_tasks, key=_sort_key)
 
-    # map task_id -> list of normalized subtasks
+    # Build subtasks map {task_id: [subtask_dict,...]} and sort each list
     subtasks_map = {}
-    task_ids_with_children = []
     for t in raw_tasks:
         subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
-        if subs:
-            task_ids_with_children.append(t["id"])
-        # sort subtasks by start_date (None last)
         subs = sorted(
             subs,
-            key=lambda s: (s["start_date"] is None, s["start_date"] or pd.Timestamp.max.date())
+            key=lambda s: (
+                s["start_date"] is None,
+                s["start_date"] or pd.Timestamp.max.date()
+            )
         )
         subtasks_map[t["id"]] = subs
 
-    # If this is the very first time we render and nothing in session yet,
-    # default to "expanded all" so user immediately sees subtasks.
-    if len(_expanded(pid)) == 0 and len(task_ids_with_children) > 0:
-        _set_all_expanded(pid, task_ids_with_children)
-
-    # 2. UI controls for collapsing / expanding everything
-    ctrl_col1, ctrl_col2, _ = st.columns([1, 1, 6])
-    with ctrl_col1:
-        if st.button("Tasks only", key=f"collapse_all_{pid}"):
-            _collapse_all(pid)
-            force_rerun()
-    with ctrl_col2:
-        if st.button("Tasks + Subtasks", key=f"expand_all_{pid}"):
-            _set_all_expanded(pid, task_ids_with_children)
-            force_rerun()
-
-    st.caption(
-        "Tip: 'Tasks only' hides all subtasks. 'Tasks + Subtasks' expands all tasks that have children."
+    # --- toggle UI (single checkbox) ---
+    # default is False (tasks only)
+    show_subtasks = st.checkbox(
+        "Show subtasks",
+        value=False,
+        key=f"show_subtasks_{pid}",
+        help="Turn on to include subtasks in the timeline."
     )
 
-    # 3. Build chart rows
-    rows = []
-
+    # --- helper to make sure bars aren't 1-pixel ticks ---
     def _safe_dates(start_d, end_d):
         """
-        Return (Start, Finish) as real date objects for plotting.
-        If Finish <= Start, extend Finish by +1 day so bar isn't a 1-pixel tick.
+        Return (Start, Finish) as date objects.
+        If Finish <= Start, extend Finish by +1 day
+        so we always get a visible bar.
         """
         if not start_d or not end_d:
             return None, None
@@ -441,29 +427,34 @@ def render_collapsible_gantt(pid: int):
             e = s + pd.Timedelta(days=1)
         return s.date(), e.date()
 
+    rows = []               # rows for the dataframe we plot
+    task_rows_for_vlines = []  # only top-level tasks, for vertical guides
+
     for t in raw_tasks:
         start_fixed, end_fixed = _safe_dates(t["start_date"], t["end_date"])
-        # Always add the parent task row if it has both dates
         if start_fixed and end_fixed:
-            rows.append({
-                "Label": f"{t['name']}",  # clean task label
+            # Top-level task row (bold label)
+            task_label = f"<b>{t['name']}</b>"
+            parent_row = {
+                "Label": task_label,
                 "Start": start_fixed,
                 "Finish": end_fixed,
                 "Status": _norm_status(t.get("status", "")),
                 "Assignee": t.get("assignee_email", None),
                 "Progress": round(float(t.get("progress", 0.0)), 1),
-                "Level": "task",  # we'll use this to indent later if we want
-            })
+                "Level": "task",
+            }
+            rows.append(parent_row)
+            task_rows_for_vlines.append(parent_row)
 
-        # If task is expanded -> include its subtasks
-        if t["id"] in _expanded(pid):
-            subs = subtasks_map.get(t["id"], [])
-            for s in subs:
+        # Only include subtasks if toggle is on
+        if show_subtasks:
+            for s in subtasks_map.get(t["id"], []):
                 st_fixed, en_fixed = _safe_dates(s["start_date"], s["end_date"])
                 if st_fixed and en_fixed:
                     rows.append({
-                        # indent subtasks visually with an arrow and leading spaces
-                        "Label": f"   ↳ {s['name']}",
+                        # subtask label: arrow, no bold
+                        "Label": f"↳ {s['name']}",
                         "Start": st_fixed,
                         "Finish": en_fixed,
                         "Status": _norm_status(s.get("status", "")),
@@ -472,14 +463,14 @@ def render_collapsible_gantt(pid: int):
                         "Level": "subtask",
                     })
 
-    # 4. Handle "no schedule data"
+    # --- handle "no data" gracefully ---
     if not rows:
-        st.info("Add start/end dates to tasks or subtasks to see them on the timeline.")
+        st.info("Add start/end dates to tasks to see them on the timeline.")
         return
 
     df = pd.DataFrame(rows)
 
-    # 5. Build Plotly timeline with real calendar dates
+    # --- build the timeline chart ---
     fig = px.timeline(
         df,
         x_start="Start",
@@ -489,23 +480,48 @@ def render_collapsible_gantt(pid: int):
         hover_data=["Status", "Assignee", "Progress"],
     )
 
-    # Reverse Y so first task is at the top, hide axis titles
+    # Reverse Y so first row is on top
     fig.update_yaxes(autorange="reversed", title=None)
 
-    # Force date axis, hide x-axis title text
+    # Time axis formatting
     fig.update_xaxes(type="date", title=None)
 
-    # Tighten margins
+    # Layout polish
     fig.update_layout(
-        margin=dict(l=20, r=20, t=30, b=30),
+        margin=dict(l=20, r=20, t=10, b=30),
         legend_title_text="Status",
     )
 
-    # 6. Render in Streamlit, using new API for width
+    # --- add dotted vertical lines for each task's start and end ---
+    # collect unique dates from TOP-LEVEL tasks only
+    vline_dates = set()
+    for tr in task_rows_for_vlines:
+        vline_dates.add(pd.to_datetime(tr["Start"]))
+        vline_dates.add(pd.to_datetime(tr["Finish"]))
+
+    for d in sorted(vline_dates):
+        fig.add_vline(
+            x=d,
+            line_dash="dot",
+            line_color="rgba(0,0,0,0.3)",
+            line_width=1,
+        )
+
+    # --- (optional) slightly bigger font for tasks than subtasks? ---
+    # We already bolded tasks using <b> ... </b> in the label.
+    # Plotly will render <b>...</b> in axis tick labels, so tasks pop.
+
+    # --- show chart in Streamlit ---
+    # NOTE:
+    # Your current Streamlit version is older and doesn't fully know
+    #   st.plotly_chart(..., width="stretch")
+    # That's why you saw the yellow deprecation box.
+    # We'll use the older pattern `use_container_width=True`
+    # which works cleanly in your environment.
     st.plotly_chart(
         fig,
-        width="stretch",               # replaces use_container_width=True
-        config={"displaylogo": False, "responsive": True},
+        use_container_width=True,
+        config={"displaylogo": False},
     )
 
 # === END: Collapsible Gantt helpers =========================================
