@@ -9,7 +9,7 @@ def force_rerun():
         fn()
 
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 from dateutil import parser
 import plotly.express as px
 import plotly.graph_objects as go
@@ -349,204 +349,165 @@ CAN_WRITE = role in ("owner", "editor")
 IS_OWNER  = role == "owner"
 
 # === BEGIN: Collapsible Gantt helpers =========================================
-# ---- state helpers -----------------------------------------------------------
+# ---- Gantt state helpers ---------------------------------
 def _expanded_key(pid: int) -> str:
     return f"gantt_expanded_{pid}"
 
 def _init_expanded_set(pid: int):
-    st.session_state.setdefault(_expanded_key(pid), set())
+    """
+    Make sure session_state has a set() of task_ids whose subtasks
+    are currently expanded in the Gantt.
+    """
+    if _expanded_key(pid) not in st.session_state:
+        st.session_state[_expanded_key(pid)] = set()
 
-def _toggle_expanded(pid: int, task_id: int):
-    s = st.session_state[_expanded_key(pid)]
-    if task_id in s:
-        s.remove(task_id)
-    else:
-        s.add(task_id)
+def _set_all_expanded(pid: int, task_ids_with_children):
+    st.session_state[_expanded_key(pid)] = set(task_ids_with_children)
 
+def _collapse_all(pid: int):
+    st.session_state[_expanded_key(pid)] = set()
+
+def _expanded(pid: int):
+    return st.session_state[_expanded_key(pid)]
+    
 # ---- data builder ------------------------------------------------------------
-def _build_collapsible_gantt_df(pid: int, show_subtasks: bool) -> pd.DataFrame:
-    """
-    Build the rows to draw in the timeline based on which parents are expanded.
-    - Clean labels (no numeric ID in the text)
-    - Indent subtasks with a bullet
-    - Coerce zero-duration items to 1 day so bars are visible
-    """
-    expanded = st.session_state[_expanded_key(pid)]
-    rows = []
-
-    tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(pid)]
-
-    def _sort_key(x):
-        return (x.get("start_date") or date.min, x.get("name") or "")
-
-    for t in sorted(tasks, key=_sort_key):
-        t_id = t["id"]
-        has_dates = bool(t["start_date"] and t["end_date"])
-        glyph = "▾" if (t_id in expanded and show_subtasks) else "▸"
-        # y-axis label (no numeric id shown)
-        label_parent = f"{glyph} {t['name'] or 'Task'}"
-
-        rows.append({
-            "Item": label_parent,
-            "Start": t["start_date"],
-            "Finish": t["end_date"],
-            "Status": _norm_status(t["status"] or "To-Do"),
-            "Assignee": t["assignee_email"],
-            "Progress": float(t["progress"] or 0),
-            "Kind": "Task",
-            "is_parent": True,
-            "parent_id": t_id,
-            "has_dates": has_dates,
-        })
-
-        # Only add children if user wants subtasks AND the parent is expanded
-        if show_subtasks and (t_id in expanded):
-            subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t_id)]
-            for s in sorted(subs, key=_sort_key):
-                label_child = f"    • {s['name'] or 'Subtask'}"   # indent
-                rows.append({
-                    "Item": label_child,
-                    "Start": s["start_date"],
-                    "Finish": s["end_date"],
-                    "Status": _norm_status(s["status"] or "To-Do"),
-                    "Assignee": s["assignee_email"],
-                    "Progress": float(s["progress"] or 0),
-                    "Kind": "Subtask",
-                    "is_parent": False,
-                    "parent_id": t_id,
-                    "has_dates": bool(s["start_date"] and s["end_date"]),
-                })
-
-    df = pd.DataFrame(rows)
-    if df.empty:
-        return df
-
-    # Ensure date columns are datetimes
-    df["Start"] = pd.to_datetime(df["Start"])
-    df["Finish"] = pd.to_datetime(df["Finish"])
-
-    # Fix "tick bars": if Start is missing or Finish <= Start, make it a 1-day bar
-    mask_bad = df["Start"].notna() & ((df["Finish"].isna()) | (df["Finish"] <= df["Start"]))
-    df.loc[mask_bad, "Finish"] = df.loc[mask_bad, "Start"] + pd.Timedelta(days=1)
-
-    # Also: if Start is NaT but Finish exists, shift a 1-day bar ending at Finish
-    mask_only_finish = df["Start"].isna() & df["Finish"].notna()
-    df.loc[mask_only_finish, "Start"] = df.loc[mask_only_finish, "Finish"] - pd.Timedelta(days=1)
-
-    return df
-
-# ---- main renderer -----------------------------------------------------------
 def render_collapsible_gantt(pid: int):
+    """
+    Builds a Plotly timeline where:
+    - Each top-level task is always shown.
+    - Subtasks only show if that task is 'expanded'.
+    - You can toggle 'Tasks only' vs 'Tasks + Subtasks'.
+    - X-axis is real calendar dates.
+    - Y labels are clean (no ID column, no "Item" label).
+    """
+
     _init_expanded_set(pid)
 
-    # Top-row controls (new)
-    cA, cB, cC, cD = st.columns([1.2, 1.2, 1.2, 4])
-    with cA:
-        show_subtasks = st.toggle("Show subtasks", value=True, key=f"gantt_show_subs_{pid}")
-    with cB:
-        if st.button("▾ Expand all", key=f"gantt_expand_all_{pid}"):
-            # expand only tasks that actually have subtasks
-            all_tasks = db.get_tasks_for_project(pid)
-            ids_with_kids = []
-            for t in all_tasks:
-                subs = db.get_subtasks_for_task(t.id)
-                if subs:
-                    ids_with_kids.append(t.id)
-            st.session_state[_expanded_key(pid)] = set(ids_with_kids)
-    with cC:
-        if st.button("▸ Collapse all", key=f"gantt_collapse_all_{pid}"):
-            st.session_state[_expanded_key(pid)] = set()
+    # 1. Pull tasks/subtasks from DB and normalize them using your helpers
+    raw_tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(pid)]
 
-    df = _build_collapsible_gantt_df(pid, show_subtasks=show_subtasks)
+    # sort tasks by start_date (None goes last)
+    def _sort_key(t):
+        return (t["start_date"] is None, t["start_date"] or pd.Timestamp.max.date())
+    raw_tasks = sorted(raw_tasks, key=_sort_key)
 
-    status_colors = {"To-Do": "#9CA3AF", "In Progress": "#2563EB", "Done": "#10B981"}
+    # map task_id -> list of normalized subtasks
+    subtasks_map = {}
+    task_ids_with_children = []
+    for t in raw_tasks:
+        subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
+        if subs:
+            task_ids_with_children.append(t["id"])
+        # sort subtasks by start_date (None last)
+        subs = sorted(
+            subs,
+            key=lambda s: (s["start_date"] is None, s["start_date"] or pd.Timestamp.max.date())
+        )
+        subtasks_map[t["id"]] = subs
 
-    if df.empty or df["Start"].isna().all() or df["Finish"].isna().all():
-        st.info("Add start/end dates to tasks (and subtasks) to see them on the timeline.")
+    # If this is the very first time we render and nothing in session yet,
+    # default to "expanded all" so user immediately sees subtasks.
+    if len(_expanded(pid)) == 0 and len(task_ids_with_children) > 0:
+        _set_all_expanded(pid, task_ids_with_children)
+
+    # 2. UI controls for collapsing / expanding everything
+    ctrl_col1, ctrl_col2, _ = st.columns([1, 1, 6])
+    with ctrl_col1:
+        if st.button("Tasks only", key=f"collapse_all_{pid}"):
+            _collapse_all(pid)
+            force_rerun()
+    with ctrl_col2:
+        if st.button("Tasks + Subtasks", key=f"expand_all_{pid}"):
+            _set_all_expanded(pid, task_ids_with_children)
+            force_rerun()
+
+    st.caption(
+        "Tip: 'Tasks only' hides all subtasks. 'Tasks + Subtasks' expands all tasks that have children."
+    )
+
+    # 3. Build chart rows
+    rows = []
+
+    def _safe_dates(start_d, end_d):
+        """
+        Return (Start, Finish) as real date objects for plotting.
+        If Finish <= Start, extend Finish by +1 day so bar isn't a 1-pixel tick.
+        """
+        if not start_d or not end_d:
+            return None, None
+        s = pd.to_datetime(start_d)
+        e = pd.to_datetime(end_d)
+        if e <= s:
+            e = s + pd.Timedelta(days=1)
+        return s.date(), e.date()
+
+    for t in raw_tasks:
+        start_fixed, end_fixed = _safe_dates(t["start_date"], t["end_date"])
+        # Always add the parent task row if it has both dates
+        if start_fixed and end_fixed:
+            rows.append({
+                "Label": f"{t['name']}",  # clean task label
+                "Start": start_fixed,
+                "Finish": end_fixed,
+                "Status": _norm_status(t.get("status", "")),
+                "Assignee": t.get("assignee_email", None),
+                "Progress": round(float(t.get("progress", 0.0)), 1),
+                "Level": "task",  # we'll use this to indent later if we want
+            })
+
+        # If task is expanded -> include its subtasks
+        if t["id"] in _expanded(pid):
+            subs = subtasks_map.get(t["id"], [])
+            for s in subs:
+                st_fixed, en_fixed = _safe_dates(s["start_date"], s["end_date"])
+                if st_fixed and en_fixed:
+                    rows.append({
+                        # indent subtasks visually with an arrow and leading spaces
+                        "Label": f"   ↳ {s['name']}",
+                        "Start": st_fixed,
+                        "Finish": en_fixed,
+                        "Status": _norm_status(s.get("status", "")),
+                        "Assignee": s.get("assignee_email", None),
+                        "Progress": round(float(s.get("progress", 0.0)), 1),
+                        "Level": "subtask",
+                    })
+
+    # 4. Handle "no schedule data"
+    if not rows:
+        st.info("Add start/end dates to tasks or subtasks to see them on the timeline.")
         return
 
-    df["Status"] = pd.Categorical(df["Status"], categories=list(status_colors.keys()), ordered=True)
+    df = pd.DataFrame(rows)
 
-    # We draw tasks and subtasks as separate traces so we can use different opacity
-    df_tasks = df[df["Kind"] == "Task"].copy()
-    df_subs  = df[df["Kind"] == "Subtask"].copy()
-    y_order = list(df["Item"])  # preserve current order
-
-    fig = go.Figure()
-
-    # TASKS
-    if not df_tasks.empty:
-        fig_tasks = px.timeline(
-            df_tasks,
-            x_start="Start", x_end="Finish", y="Item",
-            color="Status", color_discrete_map=status_colors,
-            hover_data=["Kind", "Assignee", "Progress"],
-        )
-        for tr in fig_tasks.data:
-            tr.opacity = 1.0
-            fig.add_trace(tr)
-
-    # SUBTASKS (slightly lighter)
-    if not df_subs.empty:
-        fig_subs = px.timeline(
-            df_subs,
-            x_start="Start", x_end="Finish", y="Item",
-            color="Status", color_discrete_map=status_colors,
-            hover_data=["Kind", "Assignee", "Progress"],
-        )
-        for tr in fig_subs.data:
-            tr.opacity = 0.65
-            fig.add_trace(tr)
-
-    # Today line and label
-    today = pd.to_datetime(date.today())
-    fig.add_vline(x=today, line_width=2, line_dash="dot", line_color="#EF4444")
-    fig.add_annotation(
-        x=today, y=1.02, xref="x", yref="paper",
-        text="Today", showarrow=False, font=dict(color="#EF4444")
+    # 5. Build Plotly timeline with real calendar dates
+    fig = px.timeline(
+        df,
+        x_start="Start",
+        x_end="Finish",
+        y="Label",
+        color="Status",
+        hover_data=["Status", "Assignee", "Progress"],
     )
 
+    # Reverse Y so first task is at the top, hide axis titles
+    fig.update_yaxes(autorange="reversed", title=None)
+
+    # Force date axis, hide x-axis title text
+    fig.update_xaxes(type="date", title=None)
+
+    # Tighten margins
     fig.update_layout(
-        title="Gantt — click a TASK row to expand/collapse its subtasks",
-        yaxis=dict(
-            autorange="reversed",
-            categoryorder="array", categoryarray=y_order,
-        ),
-        yaxis_title=None,  # remove "Item"
-        margin=dict(l=20, r=20, t=40, b=30),
+        margin=dict(l=20, r=20, t=30, b=30),
         legend_title_text="Status",
-        height=560,
-        bargap=0.25,
-        plot_bgcolor="rgba(0,0,0,0)",
-        clickmode="event+select",
     )
 
-    # Make bars “feel” thicker (helps perception on day-scale timelines)
-    fig.update_traces(marker_line_width=0)
-
-    # Show and catch clicks
-    clicks = plotly_events(
+    # 6. Render in Streamlit, using new API for width
+    st.plotly_chart(
         fig,
-        click_event=True, hover_event=False, select_event=False,
-        override_height=560, key=f"gantt_{pid}"
+        width="stretch",               # replaces use_container_width=True
+        config={"displaylogo": False, "responsive": True},
     )
 
-    # Toggle only when a parent row is clicked
-    if clicks:
-        # We get the y label from the click payload
-        y_label = clicks[0].get("y")
-        if isinstance(y_label, str):
-            # Our parent rows start with a caret glyph (▸ or ▾) and have no bullet "•"
-            if y_label.strip().startswith(("▸", "▾")) and ("•" not in y_label):
-                # Find the task by matching clean name (after glyph and space)
-                clicked_name = y_label.strip()[1:].strip()  # drop glyph
-                # map name -> id by reading the fresh tasks
-                for t in db.get_tasks_for_project(pid):
-                    nm = (t.name or "Task").strip()
-                    if nm == clicked_name:
-                        _toggle_expanded(pid, int(t.id))
-                        st.rerun()
-                        break
 # === END: Collapsible Gantt helpers =========================================
 
 
