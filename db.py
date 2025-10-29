@@ -52,13 +52,16 @@ class Project(Base):
     name = Column(String, nullable=False, index=True)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
+    description = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     owner = relationship("User")
     created_at = Column(DateTime, default=datetime.utcnow)
     is_public = Column(Boolean, default=False, nullable=False)
-    pin_hash  = Column(String, nullable=True) 
+    pin_hash  = Column(String, nullable=True)
+
     members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
     tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
+
 
 class ProjectMember(Base):
     __tablename__ = "project_members"
@@ -222,6 +225,18 @@ def update_project_dates(project_id: int, start_date: date, end_date: date) -> b
             return True
     except Exception:
         return False
+
+def update_project_description(project_id: int, new_description: str) -> bool:
+    """
+    Update a project's description text. Returns True if updated, False if not found.
+    """
+    with SessionLocal() as s:
+        p = s.get(Project, project_id)
+        if not p:
+            return False
+        p.description = new_description
+        s.commit()
+        return True
 
 
 def set_member_role(project_id: int, email: str, role: str = "viewer"):
