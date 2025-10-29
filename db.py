@@ -116,7 +116,7 @@ def _get_or_create_user(session, email: str, name: Optional[str] = None) -> User
         session.commit()
     return user
 
-# Public helpers the app will call
+# ---- helpers ----
 def login(email: str, name: Optional[str] = None) -> Dict:
     with SessionLocal() as s:
         user = _get_or_create_user(s, email, name)
@@ -200,7 +200,7 @@ def delete_project(project_id: int) -> None:
     with SessionLocal() as s:
         p = s.get(Project, project_id)
         if p:
-            s.delete(p)  # cascades to tasks/subtasks via relationship cascade
+            s.delete(p)  
             s.commit()
 
 def rename_project(project_id: int, new_name: str) -> None:
