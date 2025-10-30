@@ -216,7 +216,7 @@ def full_screen_project_gate(user_email: str):
                 force_rerun()
 def render_contacts_sidebar():
     with st.sidebar:
-        st.divider()
+        #st.divider()
         # Use Streamlit's native heading so it matches "Projects"
         st.subheader("Contacts")
 
