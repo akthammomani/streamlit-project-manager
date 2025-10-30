@@ -395,7 +395,7 @@ else:
             border:1px dashed #d1d5db;
             border-radius:0.75rem;
             background-color:#fcfcfc;
-            max-width:900px;
+            max-width:1400px;
             color:#9ca3af;
             font-size:.8rem;
         ">
