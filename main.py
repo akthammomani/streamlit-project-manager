@@ -356,7 +356,7 @@ IS_OWNER  = role == "owner"
 st.title(current_project.name)
 
 # date range under title
-st.caption(f"{current_project.start_date} → {current_project.end_date}")
+st.caption(f"{current_project.start_date} -> {current_project.end_date}")
 
 # pull current description safely
 proj_desc = getattr(current_project, "description", None) or ""
