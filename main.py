@@ -72,6 +72,13 @@ st.markdown("""
 # ---------- helpers ----------
 STATUS_OPTIONS = ["To-Do", "In Progress", "Done"]
 
+# Consistent status colors (Jira-like palette)
+STATUS_COLORS = {
+    "To-Do": "#9CA3AF",        # gray-400
+    "In Progress": "#2563EB",  # blue-600
+    "Done": "#16A34A",         # green-600
+}
+
 def parse_date(x):
     if not x:
         return None
@@ -507,14 +514,18 @@ def render_collapsible_gantt(pid: int):
 
     df = pd.DataFrame(rows)
 
+    # --- enforce y-order by date (oldest first), task before its subtasks ---
+    df["LevelOrder"] = df["Level"].map({"task": 0, "subtask": 1})
+    df_sorted_for_axis = (
+        df.sort_values(["Start", "LevelOrder", "Label"], ascending=[True, True, True])
+    )
+    category_labels = df_sorted_for_axis["Label"].drop_duplicates().tolist()
+
     # === dynamic height ==================================
-    base_height = 200          
+    base_height = 200
     per_row_px  = 28 if show_subtasks else 22
     chart_height = base_height + per_row_px * len(df)
-    if chart_height < 300:
-        chart_height = 300
-    if chart_height > 1200:
-        chart_height = 1200
+    chart_height = max(300, min(1200, chart_height))
     # ==========================================================
 
     fig = px.timeline(
@@ -524,9 +535,14 @@ def render_collapsible_gantt(pid: int):
         y="Label",
         color="Status",
         hover_data=["Status", "Assignee", "Progress"],
+        color_discrete_map=STATUS_COLORS,  # <--- enforce colors
     )
 
-    fig.update_yaxes(autorange="reversed", title=None)
+    fig.update_yaxes(
+        autorange="reversed", 
+        title=None,
+        categoryorder="array",
+        categoryarray=category_labels)  # <--- fixed order)
     fig.update_xaxes(type="date", title=None)
 
     fig.update_layout(
@@ -985,7 +1001,14 @@ with tab2:
             if not dfA.empty else pd.DataFrame({"status": status_order, "count": [0,0,0]})
         )
         fig_status = px.bar(
-            status_counts, y="status", x="count", text="count", orientation="h"
+            status_counts, 
+            y="status", 
+            x="count", 
+            text="count", 
+            orientation="h",
+            color="status",
+            color_discrete_map=STATUS_COLORS,            # <--- same colors
+            category_orders={"status": status_order},    # <--- fixed order
         )
         fig_status.update_traces(textposition="outside")
         fig_status.update_layout(margin=dict(l=10, r=10, t=10, b=10), yaxis_title="", xaxis_title="")
