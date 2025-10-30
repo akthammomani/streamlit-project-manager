@@ -372,7 +372,7 @@ if has_desc:
             border:1px solid #e5e7eb;
             border-radius:0.75rem;
             background-color:#fafafa;
-            max-width:900px;
+            max-width:1400px;
         ">
             <div style="font-size:.8rem; font-weight:600; color:#6b7280;
                         text-transform:uppercase; letter-spacing:.03em;
