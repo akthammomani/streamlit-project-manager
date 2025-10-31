@@ -1,4 +1,22 @@
 # db.py
+
+#============================================================#
+#                         Strivio-PM                         #
+#============================================================#
+# Author      : Aktham Almomani                              #
+# Created     : 2025-10-15                                   #
+# Version     : V1.0.0                                       #
+#------------------------------------------------------------#
+# Purpose     : Strivio-PM is a free project manager tool    #
+#               with tasks, subtasks, assignees, and Plotly  # 
+#               Gantt timelines (SQLite/Supabase powered)    #
+#                                                            #
+# Change Log  :                                              #
+#   - V1.0.0 (2025-10-15): Initial release.                  #
+#   - V1.0.1 (planned)   : Upcoming enhancements.            #
+#============================================================#
+
+
 from __future__ import annotations
 
 import os
