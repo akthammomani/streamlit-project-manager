@@ -363,6 +363,7 @@ proj_desc = getattr(current_project, "description", None) or ""
 has_desc = bool(proj_desc.strip())
 
 # --- read-only / display card ---
+# --- read-only / display card ---
 if has_desc:
     st.markdown(
         f"""
@@ -372,7 +373,8 @@ if has_desc:
             border:1px solid #e5e7eb;
             border-radius:0.75rem;
             background-color:#fafafa;
-            max-width:1400px;
+            width:100%;                 /* was max-width:900px */
+            box-sizing:border-box;      /* include padding in width */
         ">
             <div style="font-size:.8rem; font-weight:600; color:#6b7280;
                         text-transform:uppercase; letter-spacing:.03em;
@@ -395,7 +397,8 @@ else:
             border:1px dashed #d1d5db;
             border-radius:0.75rem;
             background-color:#fcfcfc;
-            max-width:1400px;
+            width:100%;                 /* was max-width:900px */
+            box-sizing:border-box;
             color:#9ca3af;
             font-size:.8rem;
         ">
@@ -404,6 +407,7 @@ else:
         """,
         unsafe_allow_html=True
     )
+
 
 
 # === BEGIN: Collapsible Gantt helpers =========================================
