@@ -205,7 +205,7 @@ def full_screen_project_gate(user_email: str):
 
         st.markdown("---")
         with st.form("center_new_project", clear_on_submit=True):
-            p_name = st.text_input("Project name", placeholder="AI-Powered Apple Leaf Specialist")
+            p_name = st.text_input("Project name", placeholder="Please enter a project name")
             c1, c2 = st.columns(2)
             with c1:
                 p_start = st.date_input("Start", value=date.today(), key="center_p_start")
