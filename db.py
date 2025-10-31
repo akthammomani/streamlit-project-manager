@@ -12,8 +12,8 @@
 #               Gantt timelines (SQLite/Supabase powered)    #
 #                                                            #
 # Change Log  :                                              #
-#   - V1.0.0 (2025-10-15): Initial release.                  #
-#   - V1.0.1 (planned)   : Upcoming enhancements.            #
+#  - V1.0.0 (2025-10-15): Initial release.                   #
+#  - V1.0.1 (planned)   : Enable notifications and many more #
 #============================================================#
 
 
