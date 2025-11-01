@@ -162,6 +162,20 @@ def centered_logo(path: str = "logo_1.png", width: int = 160) -> None:
     except Exception:
         st.image(str(p), width=width)
 
+def fetch_project_members(pid: int) -> list[dict]:
+    """Return [{'email': ..., 'role': ...}, ...] for this project."""
+    import db as _db
+    with _db.SessionLocal() as s:
+        rows = (
+            s.query(_db.User.email, _db.ProjectMember.role)
+             .join(_db.ProjectMember, _db.ProjectMember.user_id == _db.User.id)
+             .filter(_db.ProjectMember.project_id == pid)
+             .order_by(_db.User.email)
+             .all()
+        )
+    return [{"email": e, "role": r} for (e, r) in rows]
+
+
 # ---------- Auth & project gate ----------
 def full_screen_login():
     st.markdown("""
@@ -1108,6 +1122,29 @@ with tab2:
 # ---------- Members Tab ----------
 with tab3:
     st.subheader("Project Members")
+    # --- NEW: Who has access table (email + role) ---
+    try:
+        _members = fetch_project_members(current_project.id)
+    except Exception as e:
+        _members = []
+        st.warning(f"Could not load members: {e}")
+
+    if not _members:
+        st.info("No members yet.")
+    else:
+        mdf = pd.DataFrame(_members, columns=["email", "role"])
+        st.data_editor(
+            mdf.rename(columns={"email": "Email", "role": "Role"}),
+            hide_index=True,
+            disabled=True,
+            width="stretch",
+            column_config={
+                "Email": st.column_config.TextColumn("Email"),
+                "Role": st.column_config.TextColumn("Role"),
+            },
+        )
+
+    st.markdown("---")  # visual break before your existing add form
     if not CAN_WRITE:
         st.info("Read-only members cannot manage users.")
     else:
