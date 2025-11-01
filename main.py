@@ -1075,10 +1075,9 @@ with tab2:
 
     st.markdown("---")
 
-    # ---- At-Risk / Hygiene
-    st.markdown("### At-Risk / Hygiene")
+    # ---- At-Risk 
+    st.markdown("### At-Risk Tasks")
     
-    # build frames (safe when dfA is empty)
     missing_dates = dfA.loc[~dfA["has_dates"], ["name","_type","assignee_email","status","progress"]] if not dfA.empty else pd.DataFrame(columns=["name","_type","assignee_email","status","progress"])
     overdue_df    = dfA.loc[dfA["is_overdue"], ["name","_type","assignee_email","status","end_date","progress"]].sort_values("end_date") if not dfA.empty else pd.DataFrame(columns=["name","_type","assignee_email","status","end_date","progress"])
     
