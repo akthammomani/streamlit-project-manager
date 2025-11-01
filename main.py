@@ -274,7 +274,7 @@ def render_contacts_sidebar():
           <div class="contact-grid">
             <a class="contact-btn" href="https://github.com/akthammomani" target="_blank">GitHub</a>
             <a class="contact-btn" href="https://www.linkedin.com/in/akthammomani/" target="_blank">LinkedIn</a>
-            <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM</a>
+            <a class="contact-btn" href="https://github.com/akthammomani/strivio-pm" target="_blank">Strivio PM GitHub</a>
             <a class="contact-btn" href="mailto:aktham.momani81@gmail.com">Email</a>
           </div>
           <div class="contact-foot">© Aktham Momani, 2025. All rights reserved</div>
