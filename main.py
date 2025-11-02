@@ -5,7 +5,7 @@
 #============================================================#
 # Author      : Aktham Almomani                              #
 # Created     : 2025-10-15                                   #
-# Version     : V1.0.0                                       #
+# Version     : V1.0.1                                       #
 #------------------------------------------------------------#
 # Purpose     : Strivio-PM is a free project manager tool    #
 #               with tasks, subtasks, assignees, and Plotly  #
@@ -13,7 +13,7 @@
 #============================================================#
 
 import streamlit as st
-from streamlit_plotly_events import plotly_events  # noqa: F401 (kept for future interactions)
+from streamlit_plotly_events import plotly_events
 
 def force_rerun():
     fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
@@ -24,7 +24,7 @@ import pandas as pd
 from datetime import date, timedelta
 from dateutil import parser
 import plotly.express as px
-import plotly.graph_objects as go  # noqa: F401
+import plotly.graph_objects as go
 import base64
 from pathlib import Path
 from PIL import Image
@@ -34,20 +34,45 @@ import importlib
 importlib.reload(db)
 
 # ---------- PDF/report imports ----------
-from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.pagesizes import LETTER, landscape
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     PageBreak, Image as RLImage, KeepTogether
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
-# Try importing kaleido (optional) for chart images inside PDF
+# Try importing plotly.io (kaleido) for chart images inside PDF
+_HAS_KALEIDO = False
+_KALEIDO_ERR = None
 try:
-    import plotly.io as pio
+    import plotly.io as pio  # noqa
     _HAS_KALEIDO = True
-except Exception:
+except Exception as _e:
+    _KALEIDO_ERR = str(_e)
     _HAS_KALEIDO = False
+
+def _try_register_dejavu():
+    """Register DejaVuSans so the '↳' glyph renders in PDF."""
+    try:
+        # Look alongside app or OS fonts if present
+        candidates = [
+            Path("./DejaVuSans.ttf"),
+            Path(__file__).with_name("DejaVuSans.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            Path("/usr/local/share/fonts/DejaVuSans.ttf"),
+        ]
+        for p in candidates:
+            if p.exists():
+                pdfmetrics.registerFont(TTFont("DejaVuSans", str(p)))
+                return "DejaVuSans"
+    except Exception:
+        pass
+    return "Helvetica"  # fallback
+
+_PDF_BASE_FONT = _try_register_dejavu()
 
 def load_icon(name="logo_1.png"):
     p = Path(name)
@@ -62,12 +87,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ---------- Global CSS ----------
+# ---------- Theme polish ----------
 st.markdown("""
 <style>
 :root{
-  --tab-active:#2563eb;   /* active + hover color for tabs AND contact pills */
-  --tab-bg:#f6f7fb;       /* base surface */
+  --tab-active:#2563eb;
+  --tab-bg:#f6f7fb;
   --tab-text:#374151;
 }
 .stTabs [role="tablist"]{gap:10px;padding:6px 2px 14px 2px;border-bottom:0;}
@@ -92,7 +117,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- Helpers ----------
+# ---------- helpers ----------
 STATUS_OPTIONS = ["To-Do", "In Progress", "Done"]
 STATUS_COLORS = {
     "To-Do": "#9CA3AF",
@@ -215,8 +240,8 @@ def full_screen_project_gate(user_email: str):
         st.markdown("<h2 style='text-align:center;margin-top:8px;'>Choose or Create a Project</h2>", unsafe_allow_html=True)
 
         if projects:
-            opt_proj = st.selectbox("Open existing project", options=projects, format_func=lambda p: p.name)
-            if st.button("Open project"):
+            opt_proj = st.selectbox("Open existing project", options=projects, format_func=lambda p: p.name, key="gate_open_proj")
+            if st.button("Open project", key="gate_open_btn"):
                 st.session_state["selected_project_id"] = opt_proj.id
                 force_rerun()
 
@@ -291,7 +316,6 @@ def render_contacts_sidebar():
         </div>
         """, unsafe_allow_html=True)
 
-# ---------- User / Project selection ----------
 user = st.session_state.get("user")
 if not user:
     full_screen_login()
@@ -308,7 +332,7 @@ with st.sidebar:
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 3, 1])
     with c2:
-        st.image(load_logo(), width='stretch')
+        st.image(load_logo(), width="stretch")
     st.caption(f"Signed in as **{user['email']}**")
     st.markdown("---")
 
@@ -322,7 +346,7 @@ with st.sidebar:
     st.subheader("Projects")
     ids = [p.id for p in _projects_raw]
     idx = max(0, ids.index(current_project.id)) if current_project else 0
-    chosen_proj = st.selectbox("Open project", options=_projects_raw, index=idx, format_func=lambda p: p.name)
+    chosen_proj = st.selectbox("Open project", options=_projects_raw, index=idx, format_func=lambda p: p.name, key="sb_open_proj")
     if chosen_proj and chosen_proj.id != current_project.id:
         st.session_state["selected_project_id"] = chosen_proj.id
         force_rerun()
@@ -377,6 +401,7 @@ IS_OWNER  = role == "owner"
 st.title(current_project.name)
 st.caption(f"{current_project.start_date} -> {current_project.end_date}")
 
+# pull current description safely
 proj_desc = getattr(current_project, "description", None) or ""
 has_desc = bool(proj_desc.strip())
 
@@ -390,8 +415,7 @@ if has_desc:
             border-radius:0.75rem;
             background-color:#fafafa;
             width:100%;
-            box-sizing:border-box;
-        ">
+            box-sizing:border-box;">
             <div style="font-size:.8rem; font-weight:600; color:#6b7280;
                         text-transform:uppercase; letter-spacing:.03em;
                         margin-bottom:0.25rem;">
@@ -416,32 +440,14 @@ else:
             width:100%;
             box-sizing:border-box;
             color:#9ca3af;
-            font-size:.8rem;
-        ">
-            No project description yet.
-        </div>
+            font-size:.8rem;">No project description yet.</div>
         """,
         unsafe_allow_html=True
     )
 
 # === BEGIN: Collapsible Gantt helpers =========================================
-def _expanded_key(pid: int) -> str:
-    return f"gantt_expanded_{pid}"
-
-def _init_expanded_set(pid: int):
-    if _expanded_key(pid) not in st.session_state:
-        st.session_state[_expanded_key(pid)] = set()
-
-def _set_all_expanded(pid: int, task_ids_with_children):
-    st.session_state[_expanded_key(pid)] = set(task_ids_with_children)
-
-def _collapse_all(pid: int):
-    st.session_state[_expanded_key(pid)] = set()
-
-def _expanded(pid: int):
-    return st.session_state[_expanded_key(pid)]
-
 def _safe_dates_for_timeline(start_d, end_d):
+    """Return (start,end) with end > start; None if either missing."""
     if not start_d or not end_d:
         return None, None
     s = pd.to_datetime(start_d)
@@ -450,89 +456,86 @@ def _safe_dates_for_timeline(start_d, end_d):
         e = s + pd.Timedelta(days=1)
     return s.date(), e.date()
 
-def build_gantt_figure(pid: int, show_subtasks: bool):
-    """Unique-y version to avoid collapsed/missing subtasks."""
+def _task_sort_key(obj):
+    """Sort by start date (None last), then name."""
+    start = obj.get("start_date")
+    return (start is None, start or pd.Timestamp.max.date(), (obj.get("name") or "").lower())
+
+def build_gantt_rows(pid: int, show_subtasks: bool):
+    """Return list of rows for the Gantt + count to size height."""
     raw_tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(pid)]
-
-    # sort tasks by start asc (undated last)
-    def _sort_key(t):
-        return (t["start_date"] is None, t["start_date"] or pd.Timestamp.max.date())
-    raw_tasks = sorted(raw_tasks, key=_sort_key)
-
-    # fetch and sort subtasks per task
-    subtasks_map = {}
-    for t in raw_tasks:
-        subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
-        subs = sorted(subs, key=lambda s: (s["start_date"] is None, s["start_date"] or pd.Timestamp.max.date()))
-        subtasks_map[t["id"]] = subs
+    raw_tasks.sort(key=_task_sort_key)
 
     rows = []
     for t in raw_tasks:
-        s_fix, e_fix = _safe_dates_for_timeline(t["start_date"], t["end_date"])
-        if s_fix and e_fix:
+        s, e = _safe_dates_for_timeline(t["start_date"], t["end_date"])
+        if s and e:
             rows.append({
-                "Label": f"{t['name']}",
-                "Start": s_fix, "Finish": e_fix,
-                "Status": _norm_status(t.get("status","")),
+                "Label": f"<b>{t['name']}</b>",  # bold parent
+                "Start": s, "Finish": e,
+                "Status": _norm_status(t.get("status", "")),
                 "Assignee": t.get("assignee_email", None),
-                "Progress": round(float(t.get("progress",0.0)), 1),
-                "Level": "task"
+                "Progress": round(float(t.get("progress", 0.0)), 1),
+                "Level": "task",
             })
-
         if show_subtasks:
-            for s in subtasks_map.get(t["id"], []):
-                st_fix, en_fix = _safe_dates_for_timeline(s["start_date"], s["end_date"])
-                if st_fix and en_fix:
+            subs = [_to_subtask_dict(su) for su in db.get_subtasks_for_task(t["id"])]
+            subs.sort(key=_task_sort_key)
+            for su in subs:
+                ss, ee = _safe_dates_for_timeline(su["start_date"], su["end_date"])
+                if ss and ee:
+                    # no HTML bold here
                     rows.append({
-                        "Label": f"↳ {s['name']}",
-                        "Start": st_fix, "Finish": en_fix,
-                        "Status": _norm_status(s.get("status","")),
-                        "Assignee": s.get("assignee_email", None),
-                        "Progress": round(float(s.get("progress",0.0)), 1),
-                        "Level": "subtask"
+                        "Label": f"↳ {su['name']}",
+                        "Start": ss, "Finish": ee,
+                        "Status": _norm_status(su.get("status", "")),
+                        "Assignee": su.get("assignee_email", None),
+                        "Progress": round(float(su.get("progress", 0.0)), 1),
+                        "Level": "subtask",
                     })
+    return rows
 
+def build_gantt_figure(pid: int, show_subtasks: bool):
+    rows = build_gantt_rows(pid, show_subtasks)
     if not rows:
         return None
 
     df = pd.DataFrame(rows)
-    df["LevelOrder"] = df["Level"].map({"task":0,"subtask":1})
-
-    # stable sort AND unique y-values to prevent collapsing/”missing”
-    df = df.sort_values(["Start","LevelOrder","Label"], ascending=[True,True,True]).copy()
-    df["Row"] = range(len(df))  # unique row id
-    tick_text = df["Label"].tolist()
-    tick_vals = df["Row"].tolist()
+    df["LevelOrder"] = df["Level"].map({"task": 0, "subtask": 1})
+    df_sorted_for_axis = df.sort_values(["Start", "LevelOrder", "Label"], ascending=[True, True, True])
+    category_labels = df_sorted_for_axis["Label"].drop_duplicates().tolist()
 
     fig = px.timeline(
-        df, x_start="Start", x_end="Finish", y="Row",
-        color="Status", hover_data=["Label","Status","Assignee","Progress"],
+        df, x_start="Start", x_end="Finish", y="Label",
+        color="Status", hover_data=["Status", "Assignee", "Progress"],
         color_discrete_map=STATUS_COLORS,
     )
-    fig.update_yaxes(
-        autorange="reversed", title=None,
-        tickmode="array", tickvals=tick_vals, ticktext=tick_text
-    )
+    fig.update_yaxes(autorange="reversed", title=None, categoryorder="array", categoryarray=category_labels)
     fig.update_xaxes(type="date", title=None)
-    fig.update_layout(margin=dict(l=20,r=20,t=10,b=30), legend_title_text="Status", height=500)
 
-    # dotted alignment lines at each task boundary (optional)
-    vline_dates = set(pd.to_datetime(df.loc[df["Level"]=="task","Start"]).tolist()
-                      + pd.to_datetime(df.loc[df["Level"]=="task","Finish"]).tolist())
+    # Dynamic height: ~28px per row, clamped
+    rows_count = len(category_labels)
+    dyn_height = max(320, min(28 * rows_count + 140, 2200))
+    fig.update_layout(margin=dict(l=20, r=20, t=10, b=30), legend_title_text="Status", height=dyn_height)
+
+    # Vertical dotted guides at each task start/end (parents only)
+    parent_df = df[df["Level"] == "task"]
+    vline_dates = set(pd.to_datetime(parent_df["Start"]).tolist() + pd.to_datetime(parent_df["Finish"]).tolist())
     for d in sorted(vline_dates):
         fig.add_vline(x=d, line_dash="dot", line_color="rgba(0,0,0,0.3)", line_width=1)
 
-    return fig
+    return fig, rows_count
 
 def render_collapsible_gantt(pid: int):
-    show_subtasks = st.checkbox("Show subtasks", value=False,
-                                key=f"show_subtasks_{pid}",
+    show_subtasks = st.checkbox("Show subtasks", value=False, key=f"show_subtasks_{pid}",
                                 help="Turn on to include subtasks in the timeline.")
-    fig = build_gantt_figure(pid, show_subtasks)
-    if fig is None:
+    result = build_gantt_figure(pid, show_subtasks)
+    if not result:
         st.info("Add start/end dates to tasks to see them on the timeline.")
         return
-    st.plotly_chart(fig, width='stretch', config={"displaylogo": False})
+    fig, _rows = result
+    st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+
 # === END: Collapsible Gantt helpers =========================================
 
 with st.sidebar.expander("Manage current project"):
@@ -600,7 +603,6 @@ with st.sidebar.expander("Manage current project"):
 # ---------- Tabs ----------
 tab1, tab2, tab3, tab4 = st.tabs(["Tasks", "Project Analytics", "Members", "Export PDF"])
 
-# ---------- row-id mapping helpers ----------
 def _build_row_id_map(df_sorted: pd.DataFrame, ids_sorted: list[int]) -> dict[int, int]:
     return {int(i): int(ids_sorted[i]) for i in range(len(ids_sorted)) if ids_sorted[i] is not None}
 
@@ -658,7 +660,7 @@ with tab1:
         },
     )
 
-    if CAN_WRITE and st.button("💾 Save task changes"):
+    if CAN_WRITE and st.button("💾 Save task changes", key="save_tasks_btn"):
         try:
             edited_df = edited_tasks.copy()
             row_map = st.session_state.get("task_row_id_map", {})
@@ -738,7 +740,7 @@ with tab1:
                 ids_for_rows_s.append(s_["id"])
 
             df_subs = pd.DataFrame(rows_s, columns=sub_cols)
-            order_s = df_subs.sort_values(by="Start", ascending=True, na_position="last").index.tolist()
+            order_s = df_subs.sort_values(by("Start") if "Start" in df_subs else "Subtask", ascending=True, na_position="last").index.tolist()
             df_subs_sorted = df_subs.iloc[order_s].reset_index(drop=True)
             ids_sorted_s = [ids_for_rows_s[i] for i in order_s]
             sub_row_id_map = _build_row_id_map(df_subs_sorted, ids_sorted_s)
@@ -762,7 +764,7 @@ with tab1:
                 },
             )
 
-            if CAN_WRITE and st.button("💾 Save subtask changes"):
+            if CAN_WRITE and st.button("💾 Save subtask changes", key=f"save_subs_{picked_task_id}"):
                 try:
                     edited_df = edited_subs.copy()
                     row_map = st.session_state.get(f"sub_row_id_map_{picked_task_id}", {})
@@ -856,12 +858,22 @@ with tab2:
         value=True,
         key=f"analytics_include_sub_{current_project.id}"
     )
-    if include_subtasks:
-        subs_all = []
-        for t in tasks_raw:
+
+    # Build analytics table
+    rows = []
+    for t in sorted(tasks_raw, key=_task_sort_key):
+        rows.append({
+            "id": t["id"], "name": t["name"],
+            "status": _norm_status(t["status"]),
+            "start_date": t["start_date"], "end_date": t["end_date"],
+            "assignee_email": t["assignee_email"],
+            "progress": float(t["progress"] or 0),
+            "_type": "Task"
+        })
+        if include_subtasks:
             subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
-            for s in subs:
-                subs_all.append({
+            for s in sorted(subs, key=_task_sort_key):
+                rows.append({
                     "id": s["id"], "name": s["name"],
                     "status": _norm_status(s["status"]),
                     "start_date": s["start_date"], "end_date": s["end_date"],
@@ -869,31 +881,9 @@ with tab2:
                     "progress": float(s["progress"] or 0),
                     "_type": "Subtask"
                 })
-        tasks_table = [
-            {
-                "id": t["id"], "name": t["name"],
-                "status": _norm_status(t["status"]),
-                "start_date": t["start_date"], "end_date": t["end_date"],
-                "assignee_email": t["assignee_email"],
-                "progress": float(t["progress"] or 0),
-                "_type": "Task"
-            } for t in tasks_raw
-        ] + subs_all
-    else:
-        tasks_table = [
-            {
-                "id": t["id"], "name": t["name"],
-                "status": _norm_status(t["status"]),
-                "start_date": t["start_date"], "end_date": t["end_date"],
-                "assignee_email": t["assignee_email"],
-                "progress": float(t["progress"] or 0),
-                "_type": "Task"
-            } for t in tasks_raw
-        ]
+    dfA = pd.DataFrame(rows)
 
     today = date.today()
-    dfA = pd.DataFrame(tasks_table)
-
     if not dfA.empty:
         dfA["is_done"] = dfA["status"].fillna("").eq("Done")
         dfA["has_dates"] = dfA["start_date"].notna() & dfA["end_date"].notna()
@@ -926,7 +916,6 @@ with tab2:
     with c5: st.metric("Overall % Complete", f"{overall_progress}%")
 
     st.markdown("---")
-
     st.markdown("### Timeline - Gantt Chart")
     render_collapsible_gantt(current_project.id)
     st.markdown("---")
@@ -945,7 +934,7 @@ with tab2:
                             category_orders={"status": status_order})
         fig_status.update_traces(textposition="outside")
         fig_status.update_layout(margin=dict(l=10, r=10, t=10, b=10), yaxis_title="", xaxis_title="")
-        st.plotly_chart(fig_status, width='stretch', config={"displaylogo": False, "responsive": True})
+        st.plotly_chart(fig_status, width="stretch", config={"displaylogo": False, "responsive": True})
     with col2:
         st.markdown("**Workload by Assignee**")
         assignee_counts = (
@@ -956,7 +945,7 @@ with tab2:
         fig_assignee = px.bar(assignee_counts, y="assignee", x="count", text="count", orientation="h")
         fig_assignee.update_traces(textposition="outside")
         fig_assignee.update_layout(margin=dict(l=10, r=10, t=10, b=10), yaxis_title="", xaxis_title="")
-        st.plotly_chart(fig_assignee, width='stretch', config={"displaylogo": False, "responsive": True})
+        st.plotly_chart(fig_assignee, width="stretch", config={"displaylogo": False, "responsive": True})
 
     st.markdown("---")
     st.markdown("### Upcoming deadlines (next 14 days)")
@@ -1027,7 +1016,7 @@ with tab3:
     else:
         members_line = st.text_area("Add members by email (comma-separated)")
         role_choice = st.selectbox("Role for new members", ["viewer", "editor"])
-        if st.button("Add Members"):
+        if st.button("Add Members", key="add_members_btn"):
             emails = [e.strip() for e in members_line.split(",") if e.strip()]
             if not emails:
                 st.warning("No valid emails.")
@@ -1044,7 +1033,13 @@ with tab3:
 # =======================
 def _collect_all_for_pdf(project):
     tasks = [_to_task_dict(t) for t in db.get_tasks_for_project(project.id)]
-    subtasks_map = {t["id"]: [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])] for t in tasks}
+    # sort tasks and subtasks chronologically
+    tasks.sort(key=_task_sort_key)
+    subtasks_map = {}
+    for t in tasks:
+        subs = [_to_subtask_dict(s) for s in db.get_subtasks_for_task(t["id"])]
+        subs.sort(key=_task_sort_key)
+        subtasks_map[t["id"]] = subs
     try:
         members = fetch_project_members(project.id)
     except Exception:
@@ -1060,10 +1055,8 @@ def _df_for_analytics(tasks, include_subtasks=True):
             "assignee_email": t["assignee_email"], "progress": float(t["progress"] or 0),
             "_type": "Task"
         })
-    if include_subtasks:
-        for t in tasks:
-            subs = db.get_subtasks_for_task(t["id"])
-            for s in subs:
+        if include_subtasks:
+            for s in db.get_subtasks_for_task(t["id"]):
                 s = _to_subtask_dict(s)
                 rows.append({
                     "id": s["id"], "name": s["name"], "status": _norm_status(s["status"]),
@@ -1102,20 +1095,27 @@ def _kpi_from_df(dfA, p_start, p_end):
         "overdue": overdue_items, "overall_pct": overall_progress
     }
 
+def _para(text, style, bold=False):
+    if bold:
+        return Paragraph(f"<b>{text}</b>", style)
+    return Paragraph(text, style)
+
 def build_project_pdf(project, include_subtasks=True, include_charts=True):
-    """Return PDF bytes."""
+    """Return PDF bytes in LANDSCAPE with requested options."""
     tasks, subtasks_map, members = _collect_all_for_pdf(project)
     dfA = _df_for_analytics(tasks, include_subtasks=include_subtasks)
     kpi = _kpi_from_df(dfA, project.start_date, project.end_date)
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=LETTER, topMargin=36, bottomMargin=36, leftMargin=36, rightMargin=36)
+    # Force landscape
+    doc = SimpleDocTemplate(buf, pagesize=landscape(LETTER), topMargin=28, bottomMargin=28, leftMargin=28, rightMargin=28)
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="H1", fontSize=18, leading=22, spaceAfter=12, textColor=colors.HexColor("#0f172a")))
-    styles.add(ParagraphStyle(name="H2", fontSize=14, leading=18, spaceAfter=8, textColor=colors.HexColor("#1f2937")))
-    styles.add(ParagraphStyle(name="Muted", fontSize=9, textColor=colors.HexColor("#6b7280")))
-    styles.add(ParagraphStyle(name="Body", fontSize=10.5, leading=14))
+    styles.add(ParagraphStyle(name="H1", fontName=_PDF_BASE_FONT, fontSize=18, leading=22, spaceAfter=12, textColor=colors.HexColor("#0f172a")))
+    styles.add(ParagraphStyle(name="H2", fontName=_PDF_BASE_FONT, fontSize=14, leading=18, spaceAfter=8, textColor=colors.HexColor("#1f2937")))
+    styles.add(ParagraphStyle(name="Muted", fontName=_PDF_BASE_FONT, fontSize=9, textColor=colors.HexColor("#6b7280")))
+    styles.add(ParagraphStyle(name="Body", fontName=_PDF_BASE_FONT, fontSize=10.5, leading=14))
+    styles.add(ParagraphStyle(name="Mono", fontName=_PDF_BASE_FONT, fontSize=9.5, leading=12))
 
     story = []
 
@@ -1124,21 +1124,22 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True):
     story.append(Paragraph(f"{project.start_date} → {project.end_date}", styles["Muted"]))
     story.append(Spacer(1, 6))
     desc = getattr(project, "description", "") or "—"
-    story.append(Paragraph("<b>Project Description</b>", styles["Body"]))
+    story.append(_para("Project Description", styles["Body"], bold=True))
     story.append(Spacer(1, 4))
     story.append(Paragraph(str(desc).replace("\n", "<br/>"), styles["Body"]))
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
 
     # KPIs
     kpi_table = Table(
         [["Days Total", "Days Remaining", "Items (Open/Total)", "Overdue", "Overall % Complete"],
          [str(kpi["total_days"]), str(kpi["remaining_days"]), kpi["open_total"], str(kpi["overdue"]), f"{kpi['overall_pct']}%"]],
-        colWidths=[90, 100, 140, 70, 120]
+        colWidths=[90, 110, 160, 80, 140]
     )
     kpi_table.setStyle(TableStyle([
         ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#eef2ff")),
         ("TEXTCOLOR",(0,0),(-1,0), colors.HexColor("#1f2937")),
-        ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
+        ("FONTNAME",(0,0),(-1,0), _PDF_BASE_FONT),
+        ("FONTNAME",(0,1),(-1,1), _PDF_BASE_FONT),
         ("ALIGN",(0,0),(-1,-1),"CENTER"),
         ("BOX",(0,0),(-1,-1),0.5, colors.HexColor("#d1d5db")),
         ("INNERGRID",(0,0),(-1,-1),0.25, colors.HexColor("#e5e7eb")),
@@ -1146,98 +1147,89 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True):
         ("TOPPADDING",(0,1),(-1,1),6),
     ]))
     story.append(kpi_table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
 
-    # ---- Tasks table (sorted; tasks bold; subtasks arrow; NO Description) ----
+    # Tasks & Subtasks (no Description column; tasks bold, subtasks normal; correct order)
     story.append(Paragraph("Tasks & Subtasks", styles["H2"]))
-
-    def _sort_key_start(item):
-        d = item.get("start_date")
-        return (d is None, d or date.max)
-
-    tasks_sorted = sorted(tasks, key=_sort_key_start)
-
     task_rows = [["Item", "Type", "Status", "Start", "End", "Assignee", "Progress%"]]
-    for t in tasks_sorted:
-        t_name_html = f"<b>{(t['name'] or '').strip()}</b>"
-        task_rows.append([
-            Paragraph(t_name_html, styles["Body"]),
-            "Task",
-            _norm_status(t["status"]),
-            str(t["start_date"] or ""),
-            str(t["end_date"] or ""),
-            (t["assignee_email"] or ""),
-            f"{int(round(t.get('progress') or 0))}%"
-        ])
-        subs = sorted(subtasks_map.get(t["id"], []), key=_sort_key_start)
-        for s in subs:
-            s_name_html = f"↳ {(s['name'] or '').strip()}"
-            task_rows.append([
-                Paragraph(s_name_html, styles["Body"]),
-                "Subtask",
-                _norm_status(s["status"]),
-                str(s["start_date"] or ""),
-                str(s["end_date"] or ""),
-                (s["assignee_email"] or ""),
-                f"{int(round(s.get('progress') or 0))}%"
-            ])
+    for t in tasks:
+        task_rows.append([f"{t['name'] or ''}", "Task", _norm_status(t["status"]),
+                          str(t["start_date"] or ""), str(t["end_date"] or ""),
+                          t["assignee_email"] or "", f'{int(round(t["progress"] or 0))}%'])
+        for s in subtasks_map.get(t["id"], []):
+            task_rows.append([f"↳ {s['name'] or ''}", "Subtask", _norm_status(s["status"]),
+                              str(s["start_date"] or ""), str(s["end_date"] or ""),
+                              s["assignee_email"] or "", f'{int(round(s["progress"] or 0))}%'])
 
-    task_table = Table(task_rows, repeatRows=1,
-                       colWidths=[170, 55, 70, 60, 60, 120, 60])
+    task_table = Table(task_rows, repeatRows=1, colWidths=[230, 70, 80, 70, 70, 160, 70])
     task_table.setStyle(TableStyle([
         ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#f3f4f6")),
-        ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
+        ("FONTNAME",(0,0),(-1,0), _PDF_BASE_FONT),
         ("ALIGN",(2,0),(2,-1),"CENTER"),
         ("ALIGN",(6,0),(6,-1),"CENTER"),
         ("VALIGN",(0,0),(-1,-1),"TOP"),
         ("BOX",(0,0),(-1,-1),0.5, colors.HexColor("#d1d5db")),
         ("INNERGRID",(0,0),(-1,-1),0.25, colors.HexColor("#e5e7eb")),
     ]))
+    # Bold the task item cells (row 1..N where type == Task)
+    for r_idx in range(1, len(task_rows)):
+        if task_rows[r_idx][1] == "Task":
+            task_table.setStyle(TableStyle([("FONTNAME", (0, r_idx), (0, r_idx), _PDF_BASE_FONT),
+                                            ("FONTSIZE", (0, r_idx), (0, r_idx), 10.5),
+                                            ("TEXTCOLOR", (0, r_idx), (0, r_idx), colors.HexColor("#111827")),
+                                            ("FONT", (0, r_idx), (0, r_idx), _PDF_BASE_FONT, 10.5),
+                                            ("LEFTPADDING",(0, r_idx),(0, r_idx),6),
+                                            ("RIGHTPADDING",(0, r_idx),(0, r_idx),4)]))
+        else:
+            # ensure subtasks normal-weight (and they already start with ↳)
+            task_table.setStyle(TableStyle([("FONTNAME", (0, r_idx), (0, r_idx), _PDF_BASE_FONT)]))
+
     story.append(task_table)
     story.append(PageBreak())
 
-    # Analytics section (charts optional, titles kept with charts)
+    # Analytics section (charts optional, keep title+image together)
     story.append(Paragraph("Project Analytics", styles["H2"]))
 
     if include_charts and _HAS_KALEIDO:
-        # Gantt with & without subtasks
-        for include in (True, False):
-            fig = build_gantt_figure(project.id, include)
-            if fig is not None:
-                img_bytes = pio.to_image(fig, format="png", scale=2)
-                story.append(KeepTogether([
-                    Paragraph(f"Gantt Chart ({'with' if include else 'without'} subtasks)", styles["Body"]),
-                    RLImage(io.BytesIO(img_bytes), width=520, height=280),
-                    Spacer(1, 8)
-                ]))
+        try:
+            # Gantt with/without subtasks
+            for include in (True, False):
+                result = build_gantt_figure(project.id, include)
+                if result:
+                    fig, _ = result
+                    img_bytes = pio.to_image(fig, format="png", scale=2)
+                    rl_img = RLImage(io.BytesIO(img_bytes), width=680, height=320)
+                    story.append(KeepTogether([Paragraph(f"Gantt Chart ({'with' if include else 'without'} subtasks)", styles["Body"]), rl_img, Spacer(1, 6)]))
 
-        # Status distribution
-        df_status = dfA.groupby("status").size().reset_index(name="count") if not dfA.empty else pd.DataFrame({"status":[],"count":[]})
-        fig1 = px.bar(df_status, x="status", y="count", color="status", color_discrete_map=STATUS_COLORS)
-        fig1.update_layout(margin=dict(l=10,r=10,t=10,b=10), height=280)
-        img1 = pio.to_image(fig1, format="png", scale=2)
-        story.append(KeepTogether([
-            Paragraph("Distribution by Status", styles["Body"]),
-            RLImage(io.BytesIO(img1), width=520, height=280),
-            Spacer(1, 6)
-        ]))
+            # Status distribution
+            df_status = dfA.groupby("status").size().reset_index(name="count") if not dfA.empty else pd.DataFrame({"status":[],"count":[]})
+            fig1 = px.bar(df_status, x="status", y="count", color="status", color_discrete_map=STATUS_COLORS)
+            fig1.update_layout(margin=dict(l=10,r=10,t=10,b=10), height=320)
+            img1 = pio.to_image(fig1, format="png", scale=2)
+            story.append(KeepTogether([Paragraph("Distribution by Status", styles["Body"]), RLImage(io.BytesIO(img1), width=680, height=320), Spacer(1,6)]))
 
-        # Assignee workload
-        df_assg = (dfA.assign(assignee=dfA["assignee_email"].fillna("Unassigned")).groupby("assignee").size().reset_index(name="count")
-                   if not dfA.empty else pd.DataFrame({"assignee":[],"count":[]}))
-        fig2 = px.bar(df_assg, x="assignee", y="count")
-        fig2.update_layout(margin=dict(l=10,r=10,t=10,b=10), height=280)
-        img2 = pio.to_image(fig2, format="png", scale=2)
-        story.append(KeepTogether([
-            Paragraph("Workload by Assignee", styles["Body"]),
-            RLImage(io.BytesIO(img2), width=520, height=280)
-        ]))
-        story.append(PageBreak())
+            # Assignee workload
+            df_assg = (dfA.assign(assignee=dfA["assignee_email"].fillna("Unassigned")).groupby("assignee").size().reset_index(name="count")
+                       if not dfA.empty else pd.DataFrame({"assignee":[],"count":[]})) 
+            fig2 = px.bar(df_assg, x="assignee", y="count")
+            fig2.update_layout(margin=dict(l=10,r=10,t=10,b=10), height=320)
+            img2 = pio.to_image(fig2, format="png", scale=2)
+            story.append(KeepTogether([Paragraph("Workload by Assignee", styles["Body"]), RLImage(io.BytesIO(img2), width=680, height=320)]))
+            story.append(PageBreak())
+        except Exception as e:
+            story.append(Paragraph(f"Charts not embedded: {e}", styles["Muted"]))
+            story.append(Spacer(1, 8))
     else:
-        story.append(Paragraph("Charts not embedded (kaleido not installed). KPIs included above.", styles["Muted"]))
+        if include_charts and not _HAS_KALEIDO:
+            msg = "Charts not embedded: Kaleido not available."
+            if _KALEIDO_ERR:
+                msg += f" ({_KALEIDO_ERR})"
+            story.append(Paragraph(msg, styles["Muted"]))
+        else:
+            story.append(Paragraph("Charts not embedded (disabled).", styles["Muted"]))
         story.append(Spacer(1, 8))
 
-    # Upcoming deadlines (14 days)
+    # Upcoming deadlines (14 days) — no Description column
     today = date.today()
     soon_mask = dfA["end_date"].notna() & (~dfA["status"].eq("Done")) & (dfA["end_date"] >= today) & (dfA["end_date"] <= (today + pd.Timedelta(days=14)))
     upcoming = dfA.loc[soon_mask, ["name","_type","assignee_email","status","end_date","progress"]].sort_values("end_date") if not dfA.empty else pd.DataFrame()
@@ -1249,16 +1241,16 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True):
             [r["name"], r["_type"], r["assignee_email"] or "", r["status"], str(r["end_date"]), int(round(r["progress"] or 0))]
             for _, r in upcoming.iterrows()
         ]
-        up_table = Table(up_rows, repeatRows=1, colWidths=[170,55,120,70,65,60])
+        up_table = Table(up_rows, repeatRows=1, colWidths=[260,70,180,80,80,70])
         up_table.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#f3f4f6")),
-            ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
+            ("FONTNAME",(0,0),(-1,0), _PDF_BASE_FONT),
             ("ALIGN",(5,1),(5,-1),"CENTER"),
             ("BOX",(0,0),(-1,-1),0.5, colors.HexColor("#d1d5db")),
             ("INNERGRID",(0,0),(-1,-1),0.25, colors.HexColor("#e5e7eb")),
         ]))
         story.append(up_table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
 
     # At-Risk
     story.append(Paragraph("At-Risk Items", styles["H2"]))
@@ -1271,36 +1263,37 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True):
                              ["name","_type","assignee_email","status","end_date","progress"]].sort_values("end_date")
         if missing_dates.empty and overdue_df.empty:
             story.append(Paragraph("Nothing is out of order right now.", styles["Body"]))
-        else:
-            if not missing_dates.empty:
-                story.append(Paragraph("Items missing start or end dates:", styles["Body"]))
-                miss_rows = [["Item","Type","Assignee","Status","Progress%"]] + [
-                    [r["name"], r["_type"], r["assignee_email"] or "", r["status"], int(round(r["progress"] or 0))]
-                    for _, r in missing_dates.iterrows()
-                ]
-                miss_table = Table(miss_rows, repeatRows=1, colWidths=[200,55,140,70,60])
-                miss_table.setStyle(TableStyle([
-                    ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#fff7ed")),
-                    ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-                    ("BOX",(0,0),(-1,-1),0.5, colors.HexColor("#d1d5db")),
-                    ("INNERGRID",(0,0),(-1,-1),0.25, colors.HexColor("#fde68a")),
-                ]))
-                story.append(miss_table)
-                story.append(Spacer(1,8))
-            if not overdue_df.empty:
-                story.append(Paragraph("Overdue items:", styles["Body"]))
-                ov_rows = [["Item","Type","Assignee","Status","Due","Progress%"]] + [
-                    [r["name"], r["_type"], r["assignee_email"] or "", r["status"], str(r["end_date"]), int(round(r["progress"] or 0))]
-                    for _, r in overdue_df.iterrows()
-                ]
-                ov_table = Table(ov_rows, repeatRows=1, colWidths=[200,55,140,70,60,60])
-                ov_table.setStyle(TableStyle([
-                    ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#fee2e2")),
-                    ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-                    ("BOX",(0,0),(-1,-1),0.5, colors.HexColor("#d1d5db")),
-                    ("INNERGRID",(0,0),(-1,-1),0.25, colors.HexColor("#fecaca")),
-                ]))
-                story.append(ov_table)
+
+        if not missing_dates.empty:
+            story.append(Paragraph("Items missing start or end dates:", styles["Body"]))
+            miss_rows = [["Item","Type","Assignee","Status","Progress%"]] + [
+                [r["name"], r["_type"], r["assignee_email"] or "", r["status"], int(round(r["progress"] or 0))]
+                for _, r in missing_dates.iterrows()
+            ]
+            miss_table = Table(miss_rows, repeatRows=1, colWidths=[280,70,200,80,70])
+            miss_table.setStyle(TableStyle([
+                ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#fff7ed")),
+                ("FONTNAME",(0,0),(-1,0), _PDF_BASE_FONT),
+                ("BOX",(0,0),(-1,-1),0.5, colors.HexColor("#d1d5db")),
+                ("INNERGRID",(0,0),(-1,-1),0.25, colors.HexColor("#fde68a")),
+            ]))
+            story.append(miss_table)
+            story.append(Spacer(1,8))
+
+        if not overdue_df.empty:
+            story.append(Paragraph("Overdue items:", styles["Body"])))
+            ov_rows = [["Item","Type","Assignee","Status","Due","Progress%"]] + [
+                [r["name"], r["_type"], r["assignee_email"] or "", r["status"], str(r["end_date"]), int(round(r["progress"] or 0))]
+                for _, r in overdue_df.iterrows()
+            ]
+            ov_table = Table(ov_rows, repeatRows=1, colWidths=[280,70,200,80,80,70])
+            ov_table.setStyle(TableStyle([
+                ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#fee2e2")),
+                ("FONTNAME",(0,0),(-1,0), _PDF_BASE_FONT),
+                ("BOX",(0,0),(-1,-1),0.5, colors.HexColor("#d1d5db")),
+                ("INNERGRID",(0,0),(-1,-1),0.25, colors.HexColor("#fecaca")),
+            ]))
+            story.append(ov_table)
     story.append(PageBreak())
 
     # Members
@@ -1309,10 +1302,10 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True):
         story.append(Paragraph("No members.", styles["Body"]))
     else:
         mem_rows = [["Email","Role"]] + [[m["email"], m["role"]] for m in members]
-        mem_table = Table(mem_rows, repeatRows=1, colWidths=[260,120])
+        mem_table = Table(mem_rows, repeatRows=1, colWidths=[360,160])
         mem_table.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#f3f4f6")),
-            ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
+            ("FONTNAME",(0,0),(-1,0), _PDF_BASE_FONT),
             ("BOX",(0,0),(-1,-1),0.5, colors.HexColor("#d1d5db")),
             ("INNERGRID",(0,0),(-1,-1),0.25, colors.HexColor("#e5e7eb")),
         ]))
@@ -1338,7 +1331,7 @@ with tab4:
         key=f"export_include_charts_{current_project.id}"
     )
 
-    if st.button("📄 Generate PDF"):
+    if st.button("📄 Generate PDF", key="gen_pdf_btn"):
         try:
             pdf_bytes = build_project_pdf(
                 project=current_project,
@@ -1352,4 +1345,9 @@ with tab4:
                 mime="application/pdf",
             )
         except Exception as e:
-            st.error(f"PDF export failed: {e}")
+            err = str(e)
+            # Helpful message when kaleido>=1 requires Chrome
+            if "kaleido" in err.lower() and "chrome" in err.lower():
+                st.error("PDF export failed:\n\nKaleido requires Google Chrome to be installed.\n\nInstall Chrome on the container/host or run: `plotly_get_chrome`.")
+            else:
+                st.error(f"PDF export failed: {e}")
