@@ -856,7 +856,11 @@ with tab2:
 
     tasks_raw = [_to_task_dict(t) for t in db.get_tasks_for_project(current_project.id)]
 
-    include_subtasks = st.checkbox("Include subtasks in analytics", value=True)
+    include_subtasks = st.checkbox(
+    "Include subtasks in analytics",
+    value=True,
+    key=f"analytics_include_sub_{current_project.id}"
+    )
     if include_subtasks:
         subs_all = []
         for t in tasks_raw:
@@ -1109,7 +1113,7 @@ def _kpi_from_df(dfA, p_start, p_end):
 def build_project_pdf(project, include_subtasks=True, include_charts=True):
     """Return PDF bytes."""
     tasks, subtasks_map, members = _collect_all_for_pdf(project)
-    dfA = _df_for_analytics(tasks, include_subtasks=True)
+    dfA = _df_for_analytics(tasks, include_subtasks=include_subtasks)
     kpi = _kpi_from_df(dfA, project.start_date, project.end_date)
 
     buf = io.BytesIO()
@@ -1300,8 +1304,16 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True):
 with tab4:
     st.subheader("Export PDF")
     st.caption("Generate a polished PDF report with project details, tasks, analytics, and members.")
-    include_sub = st.checkbox("Include subtasks in analytics", value=True)
-    include_charts = st.checkbox("Embed charts/Gantt (requires kaleido)", value=True)
+    include_sub = st.checkbox(
+    "Include subtasks in analytics",
+    value=True,
+    key=f"export_include_sub_{current_project.id}"
+    )
+    include_charts = st.checkbox(
+        "Embed charts/Gantt (requires kaleido)",
+        value=True,
+        key=f"export_include_charts_{current_project.id}"
+    )
 
     if st.button("📄 Generate PDF"):
         try:
