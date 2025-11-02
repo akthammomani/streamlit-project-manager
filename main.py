@@ -1199,20 +1199,46 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True, page_
     story.append(kpi_table)
     story.append(Spacer(1, 12))
 
-    # Tasks table (clean "Progress %")
+    # -------- Tasks & Subtasks table (NO Description; tasks bold, subtasks normal) --------
     story.append(Paragraph("Tasks & Subtasks", styles["H2"]))
-    df_tasks = []
+
+    header = ["Item", "Type", "Status", "Start", "End", "Assignee", "Progress %"]
+    data = [header]
+    task_row_indices = []  # table row indices (1-based after header) that should be bold
+
+    row_idx = 1  # header is row 0
     for t in tasks:
-        df_tasks.append([t["name"] or "", "Task", _norm_status(t["status"]), str(t["start_date"] or ""), str(t["end_date"] or ""),
-                         t["assignee_email"] or "", f'{int(round(t["progress"] or 0))}%', (t.get("description") or "")])
+        # Task row
+        data.append([
+            t["name"] or "",
+            "Task",
+            _norm_status(t["status"]),
+            str(t["start_date"] or ""),
+            str(t["end_date"] or ""),
+            t["assignee_email"] or "",
+            f'{int(round(t["progress"] or 0))}%'
+        ])
+        task_row_indices.append(row_idx)
+        row_idx += 1
+
+        # Subtasks (normal font)
         for s in subtasks_map.get(t["id"], []):
-            df_tasks.append([f"↳ {s['name'] or ''}", "Subtask", _norm_status(s["status"]), str(s["start_date"] or ""), str(s["end_date"] or ""),
-                             s["assignee_email"] or "", f'{int(round(s["progress"] or 0))}%', (s.get("description") or "")])
-    task_table = Table(
-        [["Item", "Type", "Status", "Start", "End", "Assignee", "Progress %", "Description"]] + df_tasks,
-        repeatRows=1, colWidths=[150, 55, 70, 60, 60, 110, 70, 140]
-    )
-    task_table.setStyle(TableStyle([
+            data.append([
+                f"↳ {s['name'] or ''}",
+                "Subtask",
+                _norm_status(s["status"]),
+                str(s["start_date"] or ""),
+                str(s["end_date"] or ""),
+                s["assignee_email"] or "",
+                f'{int(round(s["progress"] or 0))}%'
+            ])
+            row_idx += 1
+
+    # Wider columns now that Description is removed
+    col_widths = [200, 60, 70, 70, 70, 130, 70]
+
+    task_table = Table(data, repeatRows=1, colWidths=col_widths)
+    table_style = [
         ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#f3f4f6")),
         ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
         ("ALIGN",(2,0),(2,-1),"CENTER"),
@@ -1220,15 +1246,21 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True, page_
         ("VALIGN",(0,0),(-1,-1),"TOP"),
         ("BOX",(0,0),(-1,-1),0.5, colors.HexColor("#d1d5db")),
         ("INNERGRID",(0,0),(-1,-1),0.25, colors.HexColor("#e5e7eb")),
-    ]))
-    story.append(KeepTogether(task_table))
+        ("FONTSIZE",(0,0),(-1,-1),8),
+    ]
+    # Make task rows bold
+    for r in task_row_indices:
+        table_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
+
+    task_table.setStyle(TableStyle(table_style))
+    story.append(task_table)
     story.append(PageBreak())
 
-    # Analytics section (charts optional)
+    # -------- Analytics (unchanged) --------
     story.append(Paragraph("Project Analytics", styles["H2"]))
 
     if include_charts and _HAS_KALEIDO:
-        # Gantts
+        # Gantt (with / without subtasks)
         for include in (True, False):
             fig = build_gantt_figure(project.id, include)
             if fig is not None:
@@ -1261,7 +1293,7 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True, page_
         story.append(Paragraph("Charts not embedded (kaleido not installed). KPIs included above.", styles["Muted"]))
         story.append(Spacer(1, 8))
 
-    # Upcoming deadlines (14 days)
+    # -------- Upcoming deadlines (already has no Description; left as-is) --------
     today = date.today()
     soon_mask = dfA["end_date"].notna() & (~dfA["status"].eq("Done")) & (dfA["end_date"] >= today) & (dfA["end_date"] <= (today + pd.Timedelta(days=14)))
     upcoming = dfA.loc[soon_mask, ["name","_type","assignee_email","status","end_date","progress"]].sort_values("end_date") if not dfA.empty else pd.DataFrame()
@@ -1273,7 +1305,7 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True, page_
             [r["name"], r["_type"], r["assignee_email"] or "", r["status"], str(r["end_date"]), f"{int(round(r['progress'] or 0))}%"]
             for _, r in upcoming.iterrows()
         ]
-        up_table = Table(up_rows, repeatRows=1, colWidths=[170,55,140,70,65,70])
+        up_table = Table(up_rows, repeatRows=1, colWidths=[190,55,160,70,70,70])
         up_table.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#f3f4f6")),
             ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
@@ -1284,7 +1316,7 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True, page_
         story.append(up_table)
     story.append(Spacer(1, 12))
 
-    # At-Risk
+    # -------- At-Risk (no Description; unchanged) --------
     story.append(Paragraph("At-Risk Items", styles["H2"]))
     if dfA.empty:
         story.append(Paragraph("No data.", styles["Body"]))
@@ -1302,7 +1334,7 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True, page_
                     [r["name"], r["_type"], r["assignee_email"] or "", r["status"], f"{int(round(r['progress'] or 0))}%"]
                     for _, r in missing_dates.iterrows()
                 ]
-                miss_table = Table(miss_rows, repeatRows=1, colWidths=[200,55,160,70,70])
+                miss_table = Table(miss_rows, repeatRows=1, colWidths=[210,55,170,70,70])
                 miss_table.setStyle(TableStyle([
                     ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#fff7ed")),
                     ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
@@ -1317,7 +1349,7 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True, page_
                     [r["name"], r["_type"], r["assignee_email"] or "", r["status"], str(r["end_date"]), f"{int(round(r['progress'] or 0))}%"]
                     for _, r in overdue_df.iterrows()
                 ]
-                ov_table = Table(ov_rows, repeatRows=1, colWidths=[200,55,160,70,70,70])
+                ov_table = Table(ov_rows, repeatRows=1, colWidths=[210,55,170,70,70,70])
                 ov_table.setStyle(TableStyle([
                     ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#fee2e2")),
                     ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
@@ -1346,6 +1378,7 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True, page_
     pdf_bytes = buf.getvalue()
     buf.close()
     return pdf_bytes
+
 
 # --------------- Export tab UI ----------------
 with tab4:
