@@ -1297,7 +1297,7 @@ def build_project_pdf(project, include_subtasks=True, include_charts=True, page_
             story.append(Paragraph("Nothing is out of order right now.", styles["Body"]))
         else:
             if not missing_dates.empty:
-                story.append(Paragraph("Items missing start or end dates:", styles["Body"])))
+                story.append(Paragraph("Items missing start or end dates:", styles["Body"]))
                 miss_rows = [["Item","Type","Assignee","Status","Progress %"]] + [
                     [r["name"], r["_type"], r["assignee_email"] or "", r["status"], f"{int(round(r['progress'] or 0))}%"]
                     for _, r in missing_dates.iterrows()
